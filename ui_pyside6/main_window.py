@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
 from services.account_service import AccountService
 from services.budget_service import BudgetService
 from services.demo_profile_service import DemoProfileService
+from services.debt_service import DebtService
 from services.movement_service import MovementService
 from services.profile_service import ProfileService
 from services.reconciliation_service import ReconciliationService
@@ -28,6 +29,7 @@ from services.settings_service import SettingsService
 from ui_pyside6.pages.accounts_page import AccountsPage
 from ui_pyside6.pages.budgets_page import BudgetsPage
 from ui_pyside6.pages.dashboard_page import DashboardPage
+from ui_pyside6.pages.debts_page import DebtsPage
 from ui_pyside6.pages.movements_page import MovementsPage
 from ui_pyside6.pages.profiles_page import ProfilesPage
 from ui_pyside6.pages.reconciliation_page import ReconciliationPage
@@ -193,6 +195,7 @@ class MainWindow(QMainWindow):
         movement_service = MovementService(data_dir=data_dir)
         budget_service = BudgetService(data_dir=data_dir)
         account_service = AccountService(data_dir=data_dir)
+        debt_service = DebtService(data_dir=data_dir)
         reconciliation_service = ReconciliationService(data_dir=data_dir)
         settings_service = SettingsService(
             config_dir=profile.config_dir,
@@ -214,6 +217,7 @@ class MainWindow(QMainWindow):
             NavigationItem("Dashboard", DashboardPage(data_dir=data_dir)),
             NavigationItem("Movimientos", MovementsPage(movement_service)),
             NavigationItem("Cuentas", AccountsPage(account_service)),
+            NavigationItem("Deudas", DebtsPage(debt_service)),
             NavigationItem("Presupuestos", BudgetsPage(budget_service)),
             NavigationItem("Reportes", ReportsPage(report_service)),
             NavigationItem(

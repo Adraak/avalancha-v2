@@ -470,3 +470,63 @@ futuras.
 - `tests/test_v2_settings_service.py`
 - `tests/test_v2_architecture.py` actualizado para importar `SettingsService`
   sin cargar frameworks de UI.
+
+## Etapa 13 - Deudas
+
+### Motivo de seleccion
+
+Deudas quedo como la siguiente prioridad porque ya era parte de los indicadores
+financieros, reportes, Perfil Demo y pagos vinculados, pero no existia una
+pantalla V2 ni un servicio CRUD propio para administrarla.
+
+### Modulos funcionales
+
+- `services/debt_service.py`: CRUD, validaciones, activacion, desactivacion y
+  proteccion de integridad.
+- `ui_pyside6/pages/debt_dialog.py`: formulario PySide6 para crear y editar
+  deudas.
+- `ui_pyside6/pages/debts_page.py`: tabla funcional con acciones Nueva deuda,
+  Editar, Eliminar, Activar, Desactivar y Actualizar.
+- `ui_pyside6/main_window.py`: nueva entrada visible "Deudas".
+
+### Flujo de arquitectura
+
+`PySide6 -> DebtService -> BudgetRepository -> deudas.json`
+
+La UI no accede directamente a JSON ni almacenamiento. Las reglas de negocio
+viven en `DebtService`.
+
+### Reglas implementadas
+
+- Nombre obligatorio.
+- Categoria valida.
+- Saldos y pagos numericos.
+- Pago mensual mayor que cero.
+- Interes mensual no negativo.
+- Nombre no duplicado.
+- Eliminacion bloqueada si la deuda esta asociada a movimientos o recurrentes.
+
+### Integracion aplicada
+
+- Usa `data_dir` del perfil activo.
+- Compatible con `FinancialSummaryService`.
+- Compatible con reportes y Perfil Demo.
+- Las pruebas verifican aislamiento entre Personal y Demo Avalancha.
+
+### Porcentaje aproximado migrado
+
+- Deudas: 100% del CRUD definido para V2.
+- Proyecto V2 completo: 62% aproximado.
+
+### Riesgos pendientes
+
+- Movimientos aun no permite seleccionar deuda asociada desde el dialogo V2.
+- Dashboard debe pasar de vista basica a tablero consolidado.
+- La persistencia definitiva sigue usando `BudgetRepository` heredado como
+  adaptador temporal.
+
+### Tests agregados
+
+- `tests/test_v2_debt_service.py`
+- `tests/test_v2_architecture.py` actualizado para importar `DebtService`
+  sin cargar frameworks de UI.

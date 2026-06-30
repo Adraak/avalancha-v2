@@ -607,3 +607,62 @@ V2, manteniendo la arquitectura PySide6 -> Services -> Core -> Storage.
 - El modo oscuro queda preparado, pero aun no aplica un tema visual completo.
 - La sincronizacion queda solo como bandera futura.
 - El backup local queda con carpeta configurable, sin accion de respaldo manual.
+
+## Etapa 13 - Deudas
+
+### Motivo de seleccion
+
+Tras revisar el estado posterior a Configuracion, Deudas era la brecha tecnica
+mas relevante: reportes, resumen financiero y movimientos ya consumian
+`deudas.json`, pero V2 no tenia un modulo propio para administrar esas deudas.
+
+### Objetivo
+
+Migrar la administracion de deudas a PySide6, manteniendo la arquitectura
+PySide6 -> Services -> Core -> Storage y respetando perfiles activos.
+
+### Avance realizado
+
+- Se creo `services/debt_service.py` con CRUD completo.
+- Se creo `ui_pyside6/pages/debt_dialog.py`.
+- Se creo `ui_pyside6/pages/debts_page.py`.
+- Se integro la seccion Deudas en `ui_pyside6/main_window.py`.
+- Se exporto `DebtService` desde `services/__init__.py`.
+- Se agrego `tests/test_v2_debt_service.py`.
+- Se actualizo la prueba de arquitectura para importar `DebtService` sin UI.
+
+### Funcionalidades implementadas
+
+- Listar deudas del perfil activo.
+- Crear deuda.
+- Editar deuda.
+- Eliminar deuda sin movimientos asociados.
+- Activar deuda.
+- Desactivar deuda.
+- Ver saldo actual, saldo mes anterior, disminucion mensual, pago mensual e
+  interes estimado.
+
+### Validaciones migradas a services
+
+- Nombre obligatorio.
+- Categoria valida.
+- Saldo actual y saldo mes anterior numericos y no negativos.
+- Pago mensual mayor que cero.
+- Pago minimo, cupo e interes no negativos.
+- Nombre de deuda no duplicado.
+- Bloqueo de eliminacion para deudas con movimientos o recurrentes asociados.
+
+### Decisiones de arquitectura
+
+- La UI no accede a JSON ni a `BudgetRepository`.
+- Los calculos de disminucion e interes estimado viven en `DebtService`.
+- La persistencia sigue usando `BudgetRepository` como adaptador temporal.
+- La pagina recibe el servicio desde `MainWindow`, con rutas del perfil activo.
+
+### Riesgos pendientes
+
+- Movimientos todavia no expone en UI el campo `deuda_id` para registrar pagos
+  asociados desde PySide6.
+- El dashboard sigue siendo basico y debe consolidarse con los modulos ya
+  migrados.
+- El storage definitivo aun depende del paquete heredado `avalancha`.
