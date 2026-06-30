@@ -167,7 +167,9 @@ class ReportsPage(QWidget):
         self.preview.setObjectName("MutedText")
         self.preview.setAlignment(Qt.AlignmentFlag.AlignLeft)
         self.preview.setText(
-            f"Carpeta cifrada: {Path(self.service.obtener_ruta_reportes())}",
+            "Carpeta de reportes: "
+            f"{Path(self.service.obtener_ruta_reportes())} | "
+            "Cifrado: activado",
         )
 
         layout.addWidget(title)

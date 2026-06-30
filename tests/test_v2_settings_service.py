@@ -6,7 +6,16 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from avalancha.models import (
+    CategoryBudget,
+    CuentaFinanciera,
+    INCOME,
+    MonthlyBudget,
+    Transaction,
+)
+from avalancha.storage import BudgetRepository
 from services.profile_service import ProfileService
+from services.report_service import ReportService
 from services.settings_service import SettingsService
 
 
@@ -60,6 +69,36 @@ class SettingsServiceTest(unittest.TestCase):
         self.assertTrue(loaded.sincronizacion_habilitada)
         self.assertTrue(reports.is_dir())
         self.assertTrue(backup.is_dir())
+
+    def test_report_service_usa_carpeta_configurada(self) -> None:
+        """Genera reporte cifrado en la carpeta configurada."""
+        reports = self.root / "reportes_configurados"
+        config = self.service.guardar_configuracion(
+            {
+                "carpeta_reportes": reports,
+                "moneda_principal": "CLP",
+                "apariencia": "claro",
+                "cifrado_reportes": False,
+                "carpeta_respaldo": self.root / "backup",
+            },
+        )
+        repository = self._crear_repositorio_con_datos()
+        report_service = ReportService(
+            data_dir=self.root / "data",
+            reports_dir=config.carpeta_reportes,
+            key_path=self.root / "config" / "reporte.key",
+            repository=repository,
+        )
+
+        report = report_service.generar_reporte_mensual(6, 2026)
+        entry = report_service.guardar_reporte_cifrado(report, "R2026-06.avr")
+        encrypted = (reports / "R2026-06.avr").read_bytes()
+
+        self.assertEqual(report_service.obtener_ruta_reportes(), reports)
+        self.assertEqual(Path(entry["ruta"]).parent, Path("."))
+        self.assertTrue((reports / "R2026-06.avr").exists())
+        self.assertNotIn(b"AVALANCHA", encrypted)
+        self.assertNotIn(b"Sueldo", encrypted)
 
     def test_validar_carpeta_reportes(self) -> None:
         """Rechaza una ruta de reportes que apunta a un archivo."""
@@ -147,6 +186,41 @@ class SettingsServiceTest(unittest.TestCase):
 
         self.assertNotIn("BudgetRepository", page)
         self.assertNotIn("avalancha.storage", page)
+
+    def _crear_repositorio_con_datos(self) -> BudgetRepository:
+        """Crea un repositorio minimo para generar reportes."""
+        repository = BudgetRepository(self.root / "data")
+        repository.save(
+            MonthlyBudget(
+                year=2026,
+                month=6,
+                categories=[
+                    CategoryBudget("Sueldo", INCOME, 1_000_000, True),
+                ],
+                transactions=[
+                    Transaction(
+                        transaction_type=INCOME,
+                        category="Sueldo",
+                        amount=1_000_000,
+                        tx_date="2026-06-01",
+                        description="Remuneracion",
+                    ),
+                ],
+            ),
+        )
+        repository.save_accounts(
+            [
+                CuentaFinanciera(
+                    account_id="cuenta-1",
+                    name="Cuenta prueba",
+                    account_type="cuenta_corriente",
+                    real_balance=1_000_000,
+                    registered_balance=1_000_000,
+                ),
+            ],
+        )
+        repository.save_debts([])
+        return repository
 
 
 if __name__ == "__main__":
