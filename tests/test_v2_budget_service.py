@@ -186,6 +186,25 @@ class BudgetServiceTest(unittest.TestCase):
         self.assertEqual(ejecucion.porcentaje_utilizado, 120.0)
         self.assertEqual(ejecucion.estado_visual, "rojo")
 
+    def test_presupuesto_sobre_90_por_ciento_es_rojo(self) -> None:
+        """Marca rojo cuando el uso supera el 90 por ciento."""
+        presupuesto = self.service.crear_presupuesto(
+            self._datos(categoria="Comida", monto_mensual=100_000),
+        )
+        self.movement_service.crear_movimiento(
+            fecha="10-06-2026",
+            tipo="gasto",
+            categoria="Comida",
+            cuenta_id="cuenta-1",
+            monto=95_000,
+            descripcion="Supermercado",
+        )
+
+        ejecucion = self.service.calcular_ejecucion(presupuesto.id)
+
+        self.assertEqual(ejecucion.porcentaje_utilizado, 95.0)
+        self.assertEqual(ejecucion.estado_visual, "rojo")
+
     def test_calcular_ejecucion_general(self) -> None:
         """Devuelve filas integradas para la tabla de UI."""
         self.service.crear_presupuesto(
@@ -224,4 +243,3 @@ class BudgetServiceTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

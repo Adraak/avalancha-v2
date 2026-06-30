@@ -518,6 +518,55 @@ viven en `DebtService`.
 - Deudas: 100% del CRUD definido para V2.
 - Proyecto V2 completo: 62% aproximado.
 
+## Etapa 14 - Visualización Financiera
+
+### Subfase 14.0 - Sistema Visual Base
+
+Se incorpora Avalancha Color System V1 para estandarizar colores semánticos,
+paletas categóricas, escala Viridis y escala de riesgo. El objetivo es mejorar
+la lectura visual de indicadores financieros y evitar colores arbitrarios.
+
+El módulo central es `ui_pyside6/color_system.py`. No se creó
+`ui_pyside6/theme/color_system.py` porque `ui_pyside6/theme.py` ya existe como
+archivo y no se modificó esa estructura para evitar cambios destructivos.
+
+### Módulos funcionales
+
+- `services/financial_alert_service.py`: reglas determinísticas de alertas
+  financieras.
+- `services/dashboard_visual_service.py`: prepara tarjetas, series de barras,
+  ejecución presupuestaria y alertas para el Dashboard.
+- `ui_pyside6/color_system.py`: colores semánticos, paleta categórica,
+  escala Viridis, escala de riesgo y helpers visuales.
+- `ui_pyside6/pages/dashboard_page.py`: tablero visual con tarjetas,
+  gráficos de barras y alertas.
+- `services/debt_service.py`: estado visual de deuda para presentación.
+
+### Flujo de arquitectura
+
+`PySide6 -> DashboardVisualService -> FinancialMetrics / BudgetRepository`
+
+La UI solo renderiza datos ya preparados. No accede directamente a JSON ni
+almacenamiento.
+
+Los servicios entregan estados y métricas; la UI traduce esos estados a colores
+mediante `color_system.py`.
+
+### Reglas implementadas
+
+- Flujo libre positivo: saludable.
+- Flujo libre negativo: crítico.
+- Gastos mayores que ingresos: alerta crítica.
+- Deuda mayor que ingreso mensual: advertencia.
+- Presupuesto mayor a 90%: crítico.
+- Presupuesto mayor a 100%: excedido.
+- Gastos imprevistos sobre umbral: advertencia.
+
+### Porcentaje aproximado migrado
+
+- Visualización financiera V2: 65% de una primera versión ejecutiva.
+- Proyecto V2 completo: 66% aproximado.
+
 ### Riesgos pendientes
 
 - Movimientos aun no permite seleccionar deuda asociada desde el dialogo V2.

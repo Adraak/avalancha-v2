@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QHeaderView,
@@ -17,6 +18,7 @@ from PySide6.QtWidgets import (
 
 from avalancha.models import Debt
 from services.debt_service import DebtService
+from ui_pyside6.color_system import get_debt_status_color
 from ui_pyside6.pages.debt_dialog import DebtDialog
 
 
@@ -197,7 +199,7 @@ class DebtsPage(QWidget):
                     debt.current_monthly_payment,
                 ),
                 (self._format_clp(interest), interest),
-                ("Activa" if debt.active else "Inactiva", debt.active),
+                (self.service.estado_visual(debt), debt.active),
             ]
             for column, (text, sort_value) in enumerate(values):
                 item = SortableItem(text, sort_value)
@@ -207,6 +209,10 @@ class DebtsPage(QWidget):
                     item.setTextAlignment(
                         Qt.AlignmentFlag.AlignRight
                         | Qt.AlignmentFlag.AlignVCenter,
+                    )
+                if column == 7:
+                    item.setForeground(
+                        QColor(get_debt_status_color(str(text))),
                     )
                 self.table.setItem(row, column, item)
         self.table.setSortingEnabled(True)

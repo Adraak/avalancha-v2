@@ -392,8 +392,8 @@ class BudgetService:
     @staticmethod
     def _estado_visual(porcentaje: float) -> str:
         """Calcula semaforo visual segun porcentaje usado."""
-        if porcentaje < 80:
+        if porcentaje < 70:
             return "verde"
-        if porcentaje <= 100:
+        if porcentaje <= 90:
             return "amarillo"
         return "rojo"

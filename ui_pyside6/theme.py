@@ -2,16 +2,19 @@
 
 from __future__ import annotations
 
+from ui_pyside6.color_system import (
+    BORDER as COLOR_BORDE,
+    INFO as COLOR_ACENTO,
+    PANEL as COLOR_PANEL,
+    TEXT as COLOR_TEXTO,
+    TEXT_MUTED as COLOR_TEXTO_SUAVE,
+)
+
 
 COLOR_FONDO = "#f3f6f8"
-COLOR_PANEL = "#ffffff"
 COLOR_MENU = "#12324a"
 COLOR_MENU_ACTIVO = "#1f6f8b"
 COLOR_MENU_HOVER = "#19465f"
-COLOR_TEXTO = "#1f2933"
-COLOR_TEXTO_SUAVE = "#6b7785"
-COLOR_BORDE = "#d8e1e7"
-COLOR_ACENTO = "#007c89"
 FUENTE_BASE = "Segoe UI"
 
 

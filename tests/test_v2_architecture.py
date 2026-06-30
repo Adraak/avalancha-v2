@@ -32,8 +32,10 @@ class V2ArchitectureTest(unittest.TestCase):
             from core.models.resumen_mensual import ResumenMensual
             from services.account_service import AccountService
             from services.budget_service import BudgetService
+            from services.dashboard_visual_service import DashboardVisualService
             from services.demo_profile_service import DemoProfileService
             from services.debt_service import DebtService
+            from services.financial_alert_service import FinancialAlertService
             from services.financial_summary_service import FinancialSummaryService
             from services.movement_service import MovementService
             from services.profile_service import ProfileService
@@ -78,13 +80,15 @@ class V2ArchitectureTest(unittest.TestCase):
                 carpeta_reportes=Path("reportes"),
                 carpeta_respaldo=Path("backup"),
             )
+            temp_dir = tempfile.TemporaryDirectory()
+            root = Path(temp_dir.name)
             AccountService()
             BudgetService()
+            DashboardVisualService(data_dir=root / "data")
+            FinancialAlertService()
             FinancialSummaryService()
             MovementService()
             ReconciliationService()
-            temp_dir = tempfile.TemporaryDirectory()
-            root = Path(temp_dir.name)
             profile_service = ProfileService(
                 profiles_root=root / "perfiles",
                 legacy_data_dir=root / "legacy_data",

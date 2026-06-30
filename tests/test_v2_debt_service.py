@@ -172,6 +172,19 @@ class DebtServiceTest(unittest.TestCase):
             100_000,
         )
 
+    def test_estado_visual_deuda(self) -> None:
+        """Clasifica avance visual de una deuda desde el servicio."""
+        debt = self._crear_deuda_base()
+
+        self.assertEqual(self.service.estado_visual(debt), "Bajando")
+
+        debt.previous_month_balance = debt.current_balance
+        self.assertEqual(self.service.estado_visual(debt), "Sin avance")
+
+        debt.monthly_interest_rate = 50
+        debt.current_monthly_payment = 1
+        self.assertEqual(self.service.estado_visual(debt), "Crítica")
+
     def _crear_deuda_base(self):
         """Crea una deuda base para pruebas."""
         return self.service.crear_deuda(

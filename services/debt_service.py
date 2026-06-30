@@ -111,6 +111,21 @@ class DebtService:
             return 0
         return round(debt.current_balance * (debt.monthly_interest_rate / 100))
 
+    def estado_visual(self, debt: Debt) -> str:
+        """Clasifica el avance visual de una deuda."""
+        if not debt.active:
+            return "Inactiva"
+        if debt.current_balance <= 0:
+            return "Pagada"
+        if (
+            debt.current_monthly_payment
+            <= self.calcular_interes_estimado(debt)
+        ):
+            return "Crítica"
+        if self.calcular_disminucion_mensual(debt) > 0:
+            return "Bajando"
+        return "Sin avance"
+
     def _cambiar_estado(self, debt_id: str, active: bool) -> Debt:
         """Actualiza el estado activo/inactivo de una deuda."""
         debts = self.repository.load_debts()

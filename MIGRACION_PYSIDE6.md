@@ -666,3 +666,58 @@ PySide6 -> Services -> Core -> Storage y respetando perfiles activos.
 - El dashboard sigue siendo basico y debe consolidarse con los modulos ya
   migrados.
 - El storage definitivo aun depende del paquete heredado `avalancha`.
+
+## Etapa 14 - Visualización Financiera
+
+### Objetivo
+
+Convertir el Dashboard en un tablero financiero visual con tarjetas
+semánticas, barras de comparación y alertas simples, manteniendo la
+arquitectura `PySide6 -> Services -> Core -> Storage`.
+
+### Subfase 14.0 - Sistema Visual Base
+
+Se incorpora Avalancha Color System V1 para estandarizar colores semánticos,
+paletas categóricas, escala Viridis y escala de riesgo. El objetivo es mejorar
+la lectura visual de indicadores financieros y evitar colores arbitrarios.
+
+El módulo quedó en `ui_pyside6/color_system.py` porque ya existe
+`ui_pyside6/theme.py`; crear simultáneamente una carpeta `ui_pyside6/theme/`
+obligaría a mover o borrar el archivo actual.
+
+### Avance realizado
+
+- Se creó `services/financial_alert_service.py`.
+- Se creó `services/dashboard_visual_service.py`.
+- Se creó `ui_pyside6/color_system.py`.
+- Se reemplazó el Dashboard básico por tarjetas visuales, barras de gastos,
+  comparación ingresos versus gastos, presupuesto versus gasto y alertas.
+- Se agregó estado visual de deuda en `DebtService`.
+- Se coloreó el estado de deudas desde datos entregados por el servicio.
+- Se ajustó el semáforo de presupuestos al criterio 70/90/100.
+- Se agregaron pruebas para Dashboard visual y alertas financieras.
+
+### Decisiones de arquitectura
+
+- Se usaron widgets nativos de PySide6 para gráficos de barras horizontales.
+- No se agregó PyQtGraph ni Matplotlib para evitar dependencias nuevas en esta
+  primera versión.
+- La UI no accede a JSON ni a `BudgetRepository`.
+- Las reglas de tarjetas, porcentajes, estados y alertas viven en Services.
+- La traducción de estados y categorías a colores vive en `color_system.py`.
+
+### Funcionalidades implementadas
+
+- Tarjetas visuales: ingresos reales, gastos reales, flujo libre, deuda actual,
+  patrimonio neto y gastos imprevistos.
+- Gráfico de gastos por categoría.
+- Gráfico ingresos versus gastos.
+- Visualización de presupuesto versus gasto.
+- Alertas por flujo negativo, gastos sobre ingresos, deuda alta, presupuesto
+  excedido e imprevistos altos.
+
+### Riesgos pendientes
+
+- Los gráficos son barras nativas simples; si se requiere interacción avanzada,
+  se evaluará PyQtGraph en una etapa posterior.
+- El Dashboard todavía no muestra evolución histórica mensual.
