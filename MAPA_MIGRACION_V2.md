@@ -417,3 +417,56 @@ en la carpeta del perfil personal.
 ### Tests agregados
 
 - `tests/test_v2_profile_demo.py`
+
+## Etapa 12 - Configuracion
+
+### Modulos funcionales
+
+- `core/models/configuracion.py`: contrato puro de configuracion.
+- `services/settings_service.py`: carga, validacion y persistencia por perfil.
+- `ui_pyside6/pages/settings_page.py`: pantalla PySide6 funcional.
+- `ui_pyside6/main_window.py`: inyecta `SettingsService` y usa la carpeta de
+  reportes configurada al crear `ReportService`.
+
+### Flujo de arquitectura
+
+`PySide6 -> SettingsService -> ConfiguracionAplicacion -> config/settings.json`
+
+La UI no lee ni escribe JSON directamente. Tampoco accede a
+`BudgetRepository` ni a storage heredado.
+
+### Configuracion por perfil
+
+Cada perfil guarda sus preferencias en su propia carpeta `config`:
+
+- Personal: `data/perfiles/personal/config/settings.json`
+- Demo: `data/perfiles/demo_avalancha/config/settings.json`
+
+Esto mantiene separadas rutas de reportes, respaldo, moneda y preferencias
+futuras.
+
+### Reglas implementadas
+
+- Moneda principal permitida: CLP, USD o EUR.
+- Apariencia preparada: claro, oscuro o sistema.
+- Carpeta de reportes obligatoria y no puede apuntar a un archivo.
+- Carpeta de respaldo obligatoria y no puede apuntar a un archivo.
+- Las carpetas configuradas se crean al guardar.
+- Sincronizacion queda solo como bandera futura.
+
+### Porcentaje aproximado migrado
+
+- Configuracion: 100% del alcance definido para V1 funcional.
+- Proyecto V2 completo: 56% aproximado.
+
+### Riesgos pendientes
+
+- Modo oscuro aun no aplica una hoja de estilos alternativa.
+- La accion manual de backup queda para una etapa posterior.
+- La sincronizacion futura aun no tiene implementacion tecnica.
+
+### Tests agregados
+
+- `tests/test_v2_settings_service.py`
+- `tests/test_v2_architecture.py` actualizado para importar `SettingsService`
+  sin cargar frameworks de UI.

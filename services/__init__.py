@@ -9,6 +9,7 @@ from services.movement_service import MovementService
 from services.profile_service import ProfileService
 from services.reconciliation_service import ReconciliationService
 from services.report_service import ReportService
+from services.settings_service import SettingsService
 
 __all__ = [
     "BudgetStorageService",
@@ -20,4 +21,5 @@ __all__ = [
     "ProfileService",
     "ReconciliationService",
     "ReportService",
+    "SettingsService",
 ]

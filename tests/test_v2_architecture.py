@@ -24,6 +24,7 @@ class V2ArchitectureTest(unittest.TestCase):
 
             from core.models.cuenta import Cuenta
             from core.models.conciliacion import Conciliacion
+            from core.models.configuracion import ConfiguracionAplicacion
             from core.models.deuda import Deuda
             from core.models.movimiento import Movimiento
             from core.models.perfil_financiero import PerfilFinanciero
@@ -37,6 +38,7 @@ class V2ArchitectureTest(unittest.TestCase):
             from services.profile_service import ProfileService
             from services.reconciliation_service import ReconciliationService
             from services.report_service import ReportService
+            from services.settings_service import SettingsService
 
             Movimiento(
                 id="mov-1",
@@ -71,6 +73,10 @@ class V2ArchitectureTest(unittest.TestCase):
             )
             Presupuesto(id="presupuesto-1", mes="2026-06")
             ResumenMensual(mes="2026-06")
+            ConfiguracionAplicacion(
+                carpeta_reportes=Path("reportes"),
+                carpeta_respaldo=Path("backup"),
+            )
             AccountService()
             BudgetService()
             FinancialSummaryService()
@@ -89,6 +95,11 @@ class V2ArchitectureTest(unittest.TestCase):
                 data_dir=root / "data",
                 reports_dir=root / "reportes",
                 key_path=root / "config" / "reporte.key",
+            )
+            SettingsService(
+                config_dir=root / "config",
+                reports_dir=root / "reportes",
+                backup_dir=root / "backup",
             )
             temp_dir.cleanup()
 

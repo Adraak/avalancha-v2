@@ -560,3 +560,50 @@ Cada perfil mantiene datos, reportes cifrados y configuracion separados.
   configuracion avanzada de preferencias.
 - La migracion completa de perfiles para todos los modulos futuros debe seguir
   usando `ProfileService` como fuente unica de rutas.
+
+## Etapa 12 - Configuracion
+
+### Objetivo
+
+Implementar la primera version funcional de configuracion local para Avalancha
+V2, manteniendo la arquitectura PySide6 -> Services -> Core -> Storage.
+
+### Avance realizado
+
+- Se creo el modelo puro `ConfiguracionAplicacion`.
+- Se creo `SettingsService` para leer, validar y guardar configuracion.
+- La configuracion se guarda por perfil en `config/settings.json`.
+- La pantalla `SettingsPage` reemplaza el placeholder de Configuracion.
+- `MainWindow` usa la carpeta de reportes configurada al crear
+  `ReportService`.
+
+### Opciones incluidas
+
+- Carpeta de reportes.
+- Moneda principal, con CLP como valor por defecto.
+- Apariencia preparada para claro, oscuro o sistema.
+- Cifrado de reportes como opcion persistida, sin romper el cifrado actual.
+- Carpeta de respaldo local.
+- Campo de sincronizacion preparado para una etapa futura.
+
+### Archivos creados o modificados
+
+- `core/models/configuracion.py`
+- `services/settings_service.py`
+- `ui_pyside6/pages/settings_page.py`
+- `ui_pyside6/main_window.py`
+- `tests/test_v2_settings_service.py`
+- `tests/test_v2_architecture.py`
+
+### Decisiones de arquitectura
+
+- La configuracion es por perfil para evitar mezclar Personal y Demo.
+- La UI no accede directo a storage ni valida reglas de negocio.
+- Las carpetas configuradas se crean desde el servicio al guardar.
+- El sistema de reportes sigue cifrado en esta etapa.
+
+### Riesgos pendientes
+
+- El modo oscuro queda preparado, pero aun no aplica un tema visual completo.
+- La sincronizacion queda solo como bandera futura.
+- El backup local queda con carpeta configurable, sin accion de respaldo manual.

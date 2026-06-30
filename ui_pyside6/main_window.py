@@ -24,6 +24,7 @@ from services.movement_service import MovementService
 from services.profile_service import ProfileService
 from services.reconciliation_service import ReconciliationService
 from services.report_service import ReportService
+from services.settings_service import SettingsService
 from ui_pyside6.pages.accounts_page import AccountsPage
 from ui_pyside6.pages.budgets_page import BudgetsPage
 from ui_pyside6.pages.dashboard_page import DashboardPage
@@ -193,9 +194,15 @@ class MainWindow(QMainWindow):
         budget_service = BudgetService(data_dir=data_dir)
         account_service = AccountService(data_dir=data_dir)
         reconciliation_service = ReconciliationService(data_dir=data_dir)
+        settings_service = SettingsService(
+            config_dir=profile.config_dir,
+            reports_dir=profile.reports_dir,
+            backup_dir=profile.raiz / "backup",
+        )
+        settings = settings_service.cargar_configuracion()
         report_service = ReportService(
             data_dir=data_dir,
-            reports_dir=profile.reports_dir,
+            reports_dir=settings.carpeta_reportes,
             key_path=profile.key_path,
         )
         profiles_page = ProfilesPage(
@@ -214,7 +221,7 @@ class MainWindow(QMainWindow):
                 ReconciliationPage(reconciliation_service),
             ),
             NavigationItem("Perfiles", profiles_page),
-            NavigationItem("Configuracion", SettingsPage()),
+            NavigationItem("Configuracion", SettingsPage(settings_service)),
         ]
 
     def _select_section(self, index: int) -> None:
