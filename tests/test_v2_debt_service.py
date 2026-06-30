@@ -131,7 +131,7 @@ class DebtServiceTest(unittest.TestCase):
                 },
             )
 
-        with self.assertRaisesRegex(ValueError, "categoria"):
+        with self.assertRaisesRegex(ValueError, "categoría"):
             self.service.crear_deuda(
                 {
                     "name": "Deuda",
@@ -261,6 +261,16 @@ class DebtDialogTest(unittest.TestCase):
 
         self.assertTrue(parsed.isValid())
         self.assertEqual(parsed, today)
+
+    def test_fecha_vacia_o_none_usa_fecha_actual(self) -> None:
+        """Evita fallas con fechas antiguas vacias o nulas."""
+        today = QDate.currentDate()
+
+        empty_date = DebtDialog._safe_qdate("")
+        none_date = DebtDialog._safe_qdate(None)
+
+        self.assertEqual(empty_date, today)
+        self.assertEqual(none_date, today)
 
     def test_fecha_valida_se_mantiene(self) -> None:
         """Respeta fechas heredadas validas."""

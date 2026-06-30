@@ -14,7 +14,7 @@ class AccountService:
     TIPOS_CUENTA = {
         "cuenta_corriente": "Cuenta corriente",
         "cuenta_vista": "Cuenta vista",
-        "tarjeta_credito": "Tarjeta de credito",
+        "tarjeta_credito": "Tarjeta de crédito",
         "ahorro": "Cuenta de ahorro",
         "efectivo": "Efectivo",
         "inversion": "Inversion",

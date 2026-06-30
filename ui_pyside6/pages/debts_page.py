@@ -40,12 +40,12 @@ class DebtsPage(QWidget):
 
     HEADERS = [
         "Nombre",
-        "Categoria",
+        "Categoría",
         "Saldo actual",
         "Saldo mes anterior",
-        "Disminucion",
+        "Disminución",
         "Pago mensual",
-        "Interes est.",
+        "Interés est.",
         "Estado",
     ]
 

@@ -127,15 +127,15 @@ manteniendo independencia completa de la interfaz grafica.
 - Deuda actual.
 - Variacion de deuda.
 - Pago mensual de deuda.
-- Interes mensual estimado.
+- Interés mensual estimado.
 - Amortizacion neta.
 - Patrimonio neto.
 - Activos liquidos.
 - Pasivos totales.
 - Gastos imprevistos.
 - Principales gastos.
-- Categorias sobrepasadas.
-- Categorias sin presupuesto.
+- Categorías sobrepasadas.
+- Categorías sin presupuesto.
 - Conciliacion de cuentas.
 
 ### Funciones pendientes
@@ -188,7 +188,7 @@ arquitectura `PySide6 -> Services -> Core -> Storage`.
 
 - Monto mayor que cero.
 - Fecha valida.
-- Categoria existente para el tipo seleccionado.
+- Categoría existente para el tipo seleccionado.
 - Cuenta financiera existente.
 - Tipo permitido por el modelo `Movimiento`.
 
@@ -264,7 +264,7 @@ Migrar Presupuestos a PySide6 usando la arquitectura
 ### Validaciones migradas a services
 
 - Nombre obligatorio.
-- Categoria obligatoria.
+- Categoría obligatoria.
 - Monto mensual mayor que cero.
 - Moneda obligatoria.
 - Fecha de termino no anterior a fecha de inicio.
@@ -536,7 +536,7 @@ Cada perfil mantiene datos, reportes cifrados y configuracion separados.
 - Movimientos ficticios de arriendo, comida, transporte, salud, servicios,
   ocio, ahorro, mascota, deuda e imprevistos.
 - Presupuestos por categoria.
-- Deudas ficticias de tarjeta y credito de consumo.
+- Deudas ficticias de tarjeta y crédito de consumo.
 - Conciliaciones ficticias con una cuenta cuadrada y una con diferencia.
 - Reporte demo cifrado.
 
@@ -639,23 +639,23 @@ PySide6 -> Services -> Core -> Storage y respetando perfiles activos.
 - Eliminar deuda sin movimientos asociados.
 - Activar deuda.
 - Desactivar deuda.
-- Ver saldo actual, saldo mes anterior, disminucion mensual, pago mensual e
-  interes estimado.
+- Ver saldo actual, saldo mes anterior, disminución mensual, pago mensual e
+  interés estimado.
 
 ### Validaciones migradas a services
 
 - Nombre obligatorio.
-- Categoria valida.
+- Categoría válida.
 - Saldo actual y saldo mes anterior numericos y no negativos.
 - Pago mensual mayor que cero.
-- Pago minimo, cupo e interes no negativos.
+- Pago mínimo, cupo e interés no negativos.
 - Nombre de deuda no duplicado.
 - Bloqueo de eliminacion para deudas con movimientos o recurrentes asociados.
 
 ### Decisiones de arquitectura
 
 - La UI no accede a JSON ni a `BudgetRepository`.
-- Los calculos de disminucion e interes estimado viven en `DebtService`.
+- Los cálculos de disminución e interés estimado viven en `DebtService`.
 - La persistencia sigue usando `BudgetRepository` como adaptador temporal.
 - La pagina recibe el servicio desde `MainWindow`, con rutas del perfil activo.
 

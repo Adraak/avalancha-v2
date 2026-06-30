@@ -12,10 +12,10 @@ class DebtService:
     """Administra deudas sin depender de interfaz grafica."""
 
     CATEGORIAS = {
-        "tarjeta_credito": "Tarjeta de credito",
-        "credito_consumo": "Credito de consumo",
+        "tarjeta_credito": "Tarjeta de crédito",
+        "credito_consumo": "Crédito de consumo",
         "deuda_familiar": "Deuda familiar",
-        "credito_tercero": "Credito de tercero",
+        "credito_tercero": "Crédito de tercero",
         "otra": "Otra",
     }
 
@@ -106,7 +106,7 @@ class DebtService:
 
     @staticmethod
     def calcular_interes_estimado(debt: Debt) -> int:
-        """Estima el interes mensual de una deuda."""
+        """Estima el interés mensual de una deuda."""
         if debt.monthly_interest_rate in (None, 0):
             return 0
         return round(debt.current_balance * (debt.monthly_interest_rate / 100))
@@ -153,7 +153,7 @@ class DebtService:
             ),
             minimum_payment=self._normalizar_monto(
                 datos.get("minimum_payment", 0),
-                "El pago minimo debe ser numerico.",
+                "El pago mínimo debe ser numérico.",
             ),
             monthly_interest_rate=self._normalizar_tasa(
                 datos.get("monthly_interest_rate"),
@@ -177,7 +177,7 @@ class DebtService:
 
     @staticmethod
     def _normalizar_categoria(value: object) -> str:
-        """Normaliza y valida categoria antes del modelo heredado."""
+        """Normaliza y valida categoría antes del modelo heredado."""
         category = str(value).strip().lower()
         legacy = {
             "tarjeta": "tarjeta_credito",
@@ -185,7 +185,7 @@ class DebtService:
         }
         category = legacy.get(category, category)
         if category not in DEBT_CATEGORIES:
-            raise ValueError("La categoria de deuda no es valida.")
+            raise ValueError("La categoría de deuda no es válida.")
         return category
 
     @staticmethod
@@ -194,7 +194,7 @@ class DebtService:
         if not debt.name:
             raise ValueError("El nombre de la deuda es obligatorio.")
         if debt.category not in DEBT_CATEGORIES:
-            raise ValueError("La categoria de deuda no es valida.")
+            raise ValueError("La categoría de deuda no es válida.")
         if debt.current_monthly_payment <= 0:
             raise ValueError("El pago mensual debe ser mayor que cero.")
 
@@ -214,14 +214,14 @@ class DebtService:
 
     @staticmethod
     def _buscar_indice(debts: list[Debt], debt_id: str) -> int:
-        """Busca una deuda por ID y devuelve su posicion."""
+        """Busca una deuda por ID y devuelve su posición."""
         for index, debt in enumerate(debts):
             if debt.debt_id == debt_id:
                 return index
         raise ValueError("La deuda no existe.")
 
     def _deuda_tiene_movimientos(self, debt_id: str) -> bool:
-        """Indica si una deuda esta usada por movimientos o recurrentes."""
+        """Indica si una deuda está usada por movimientos o recurrentes."""
         for label in self.repository.list_months():
             year, month = (int(part) for part in label.split("-"))
             budget = self.repository.load(year, month)
@@ -249,7 +249,7 @@ class DebtService:
         try:
             rate = float(str(value).replace(",", ".").strip())
         except (TypeError, ValueError) as exc:
-            raise ValueError("La tasa de interes debe ser numerica.") from exc
+            raise ValueError("La tasa de interés debe ser numérica.") from exc
         if rate < 0:
-            raise ValueError("La tasa de interes no puede ser negativa.")
+            raise ValueError("La tasa de interés no puede ser negativa.")
         return rate

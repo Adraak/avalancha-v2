@@ -285,7 +285,7 @@ class DemoProfileService:
             ),
             CuentaFinanciera(
                 account_id="demo-tarjeta",
-                name="Tarjeta credito Demo Avalancha",
+                name="Tarjeta de crédito Demo Avalancha",
                 account_type="tarjeta_credito",
                 real_balance=None,
             ),
@@ -308,7 +308,7 @@ class DemoProfileService:
             ),
             Debt(
                 debt_id="demo-deuda-consumo",
-                name="Credito consumo Demo Avalancha",
+                name="Crédito de consumo Demo Avalancha",
                 category="credito_consumo",
                 current_balance=2_800_000,
                 previous_month_balance=2_930_000,

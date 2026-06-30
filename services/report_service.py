@@ -280,7 +280,7 @@ class ReportService:
                         f"{self._format_clp(indicadores.pago_mensual_deuda)}"
                     ),
                     (
-                        "Interes mensual estimado: "
+                        "Interés mensual estimado: "
                         f"{self._format_clp(indicadores.interes_mensual_estimado)}"
                     ),
                     (

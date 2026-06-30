@@ -81,15 +81,15 @@ Avalancha V2 use un nucleo reutilizable e independiente de la interfaz.
 - Deuda actual.
 - Variacion mensual de deuda.
 - Pago mensual total de deuda.
-- Interes mensual estimado.
+- Interés mensual estimado.
 - Amortizacion neta.
 - Patrimonio neto.
 - Activos liquidos.
 - Pasivos totales.
 - Gastos imprevistos.
 - Principales gastos.
-- Categorias sobrepasadas.
-- Categorias sin presupuesto.
+- Categorías sobrepasadas.
+- Categorías sin presupuesto.
 - Conciliacion de cuentas.
 
 ### Funciones pendientes
@@ -499,10 +499,10 @@ viven en `DebtService`.
 ### Reglas implementadas
 
 - Nombre obligatorio.
-- Categoria valida.
+- Categoría válida.
 - Saldos y pagos numericos.
 - Pago mensual mayor que cero.
-- Interes mensual no negativo.
+- Interés mensual no negativo.
 - Nombre no duplicado.
 - Eliminacion bloqueada si la deuda esta asociada a movimientos o recurrentes.
 
