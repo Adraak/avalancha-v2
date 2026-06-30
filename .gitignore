@@ -1,0 +1,60 @@
+# Cache y bytecode de Python.
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Entornos virtuales.
+.venv/
+venv/
+env/
+
+# Logs.
+*.log
+
+# Archivos temporales.
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Metadatos locales de agentes y respaldos de Git.
+.agents/
+.codex/
+.git_broken_backup/
+
+# Empaquetado.
+build/
+dist/
+*.spec
+
+# Datos reales del usuario.
+data/
+config/
+datos_reales/
+perfiles_reales/
+perfil_personal/
+personal/
+reportes/
+reports/
+reportes_generados/
+backup/
+backups/
+respaldos/
+
+# Archivos sensibles o generados.
+config/*.key
+*.db
+*.sqlite
+*.sqlite3
+*.enc
+*.key
+*.pem
+*.p12
+*.avr
+*.avridx
+
+# Excel/PDF potencialmente sensibles.
+*.xlsx
+*.xls
+*.csv
+*.pdf
