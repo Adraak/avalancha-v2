@@ -39,7 +39,7 @@ class BudgetsPage(QWidget):
     """Pantalla CRUD de presupuestos usando BudgetService."""
 
     HEADERS = [
-        "Categoria",
+        "Categoría",
         "Presupuesto",
         "Gastado",
         "Disponible",
@@ -268,4 +268,3 @@ class BudgetsPage(QWidget):
     def _show_info(self, message: str) -> None:
         """Muestra mensajes informativos."""
         QMessageBox.information(self, "Presupuestos", message)
-

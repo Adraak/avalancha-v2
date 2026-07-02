@@ -338,18 +338,25 @@ class ReportService:
                         "Gastos imprevistos: "
                         f"{self._format_clp(indicadores.gastos_imprevistos)}"
                     ),
+                    (
+                        "Movimientos imprevistos: "
+                        f"{self._contar_imprevistos(movimientos)}"
+                    ),
+                    "",
+                    "Detalle de imprevistos:",
+                    *self._lineas_imprevistos(movimientos),
                     "",
                     "Principales gastos del mes:",
                     *self._lineas_principales_gastos(
                         indicadores.principales_gastos,
                     ),
                     "",
-                    "Categorias sobrepasadas:",
+                        "Categorías sobrepasadas:",
                     *self._lineas_o_sin_datos(
                         indicadores.categorias_sobrepasadas,
                     ),
                     "",
-                    "Categorias sin presupuesto:",
+                        "Categorías sin presupuesto:",
                     *self._lineas_o_sin_datos(
                         indicadores.categorias_sin_presupuesto,
                     ),
@@ -468,6 +475,36 @@ class ReportService:
                 f"{ReportService._format_clp(int(item['monto']))}"
             )
             for index, item in enumerate(ranking, start=1)
+        ]
+
+    @staticmethod
+    def _contar_imprevistos(movimientos: list[Any]) -> int:
+        """Cuenta movimientos marcados como imprevistos."""
+        return sum(
+            1
+            for movimiento in movimientos
+            if bool(getattr(movimiento, "imprevisto", False))
+        )
+
+    @staticmethod
+    def _lineas_imprevistos(movimientos: list[Any]) -> list[str]:
+        """Renderiza movimientos imprevistos sin perder su clase."""
+        imprevistos = [
+            movimiento
+            for movimiento in movimientos
+            if bool(getattr(movimiento, "imprevisto", False))
+        ]
+        if not imprevistos:
+            return ["Sin datos."]
+        return [
+            (
+                f"- {movimiento.fecha.strftime('%d-%m-%Y')} | "
+                f"{movimiento.categoria} | "
+                f"{movimiento.descripcion or 'Sin descripcion'} | "
+                f"{ReportService._format_clp(int(movimiento.monto))} | "
+                "Clase: Imprevisto"
+            )
+            for movimiento in imprevistos
         ]
 
     @staticmethod

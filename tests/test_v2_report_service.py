@@ -113,6 +113,15 @@ class ReportServiceTest(unittest.TestCase):
         self.assertIn("DIAGNOSTICO FINANCIERO", report.contenido)
         self.assertIn("$ 1.000.000", report.contenido)
 
+    def test_reporte_incluye_detalle_de_imprevistos(self) -> None:
+        """Mantiene la clase Imprevisto dentro del reporte mensual."""
+        report = self.service.generar_reporte_mensual(6, 2026)
+
+        self.assertIn("Movimientos imprevistos: 1", report.contenido)
+        self.assertIn("Detalle de imprevistos:", report.contenido)
+        self.assertIn("Clase: Imprevisto", report.contenido)
+        self.assertIn("Reparacion", report.contenido)
+
     def test_guardar_y_abrir_reporte_cifrado(self) -> None:
         """Guarda cifrado, lista y abre desde la app."""
         report = self.service.generar_reporte_mensual(6, 2026)

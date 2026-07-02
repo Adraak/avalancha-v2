@@ -115,6 +115,53 @@ class ProfileService:
         """Devuelve la carpeta de datos del perfil activo."""
         return self.obtener_activo().data_dir
 
+    def obtener_periodo_trabajo(
+        self,
+        perfil_id: str | None = None,
+        fecha_base: date | None = None,
+    ) -> tuple[int, int]:
+        """Devuelve anio y mes operativo para un perfil.
+
+        Usa el mes actual si existe en el perfil. Si no existe, usa el ultimo
+        mes disponible para evitar abrir pantallas vacias en perfiles demo.
+        """
+        profile = (
+            self.obtener_perfil(perfil_id)
+            if perfil_id
+            else self.obtener_activo()
+        )
+        current = fecha_base or date.today()
+        current_label = f"{current.year:04d}-{current.month:02d}"
+        repository = BudgetRepository(profile.data_dir)
+        months = sorted(repository.list_months())
+        if (
+            current_label in months
+            and self._mes_tiene_movimientos(repository, current_label)
+        ):
+            return current.year, current.month
+        active_months = [
+            label
+            for label in months
+            if self._mes_tiene_movimientos(repository, label)
+        ]
+        if active_months:
+            previous_or_current = [
+                label for label in active_months if label <= current_label
+            ]
+            selected = (
+                previous_or_current[-1]
+                if previous_or_current
+                else active_months[-1]
+            )
+            year, month = (int(part) for part in selected.split("-"))
+            return year, month
+        if current_label in months:
+            return current.year, current.month
+        if months:
+            year, month = (int(part) for part in months[-1].split("-"))
+            return year, month
+        return current.year, current.month
+
     def asegurar_demo_registrado(self) -> PerfilAplicacion:
         """Registra el perfil demo si falta, sin generar datos."""
         return self._register_if_missing(PERFIL_DEMO, "Demo Avalancha")
@@ -126,6 +173,19 @@ class ProfileService:
         self._copy_legacy_personal_data(profile)
         if not self.active_path.exists():
             self._write_json(self.active_path, {"slug": PERFIL_PERSONAL})
+
+    @staticmethod
+    def _mes_tiene_movimientos(
+        repository: BudgetRepository,
+        label: str,
+    ) -> bool:
+        """Indica si un mes tiene movimientos reales registrados."""
+        try:
+            year, month = (int(part) for part in label.split("-"))
+            budget = repository.load(year, month)
+        except (OSError, ValueError):
+            return False
+        return bool(budget.transactions)
 
     def _copy_legacy_personal_data(self, profile: PerfilAplicacion) -> None:
         """Copia datos existentes al perfil personal sin sobrescribir."""

@@ -24,6 +24,10 @@ from services.report_service import ReportService
 class DemoProfileService:
     """Crea y regenera el perfil demo sin usar datos personales."""
 
+    DEMO_YEAR = 2026
+    DEMO_MONTH = 6
+    DEMO_MONTHS = (1, 2, 3, 4, 5, 6)
+
     def __init__(self, profile_service: ProfileService | None = None) -> None:
         """Inicializa el generador con el servicio de perfiles."""
         self.profile_service = profile_service or ProfileService()
@@ -38,18 +42,22 @@ class DemoProfileService:
     def regenerar_demo(self) -> PerfilAplicacion:
         """Sobrescribe datos ficticios del demo sin tocar otros perfiles."""
         profile = self.profile_service.asegurar_demo_registrado()
-        today = date.today()
         repository = BudgetRepository(profile.data_dir)
-        budget = self._crear_presupuesto_demo(today.year, today.month)
+        budgets = self._crear_presupuestos_demo()
         accounts = self._crear_cuentas_demo()
         debts = self._crear_deudas_demo()
 
-        self._asignar_relaciones_demo(budget, accounts, debts)
-        repository.save(budget)
+        for budget in budgets:
+            self._asignar_relaciones_demo(budget, accounts, debts)
+            repository.save(budget)
         repository.save_accounts(accounts)
         repository.save_debts(debts)
-        self._crear_conciliaciones_demo(profile, today.year, today.month)
-        self._crear_reporte_demo(profile, today.year, today.month)
+        self._crear_conciliaciones_demo(
+            profile,
+            self.DEMO_YEAR,
+            self.DEMO_MONTH,
+        )
+        self._crear_reporte_demo(profile, self.DEMO_YEAR, self.DEMO_MONTH)
         return profile
 
     def abrir_demo(self) -> PerfilAplicacion:
@@ -73,12 +81,41 @@ class DemoProfileService:
         """Indica si el demo ya tiene presupuesto, cuentas y deudas."""
         repository = BudgetRepository(profile.data_dir)
         return (
-            bool(repository.list_months())
+            len(repository.list_months()) >= len(DemoProfileService.DEMO_MONTHS)
             and bool(repository.load_accounts())
             and bool(repository.load_debts())
         )
 
-    def _crear_presupuesto_demo(self, year: int, month: int) -> MonthlyBudget:
+    def _crear_presupuestos_demo(self) -> list[MonthlyBudget]:
+        """Construye seis meses ficticios para graficos historicos."""
+        ajustes = {
+            1: (0.94, 0),
+            2: (1.02, 35_000),
+            3: (0.98, 0),
+            4: (1.08, 80_000),
+            5: (1.00, 45_000),
+            6: (1.00, 0),
+        }
+        budgets = []
+        for month in self.DEMO_MONTHS:
+            expense_factor, extra_income = ajustes[month]
+            budgets.append(
+                self._crear_presupuesto_demo(
+                    self.DEMO_YEAR,
+                    month,
+                    expense_factor,
+                    extra_income,
+                ),
+            )
+        return budgets
+
+    def _crear_presupuesto_demo(
+        self,
+        year: int,
+        month: int,
+        expense_factor: float = 1.0,
+        extra_income: int = 0,
+    ) -> MonthlyBudget:
         """Construye presupuesto demo con un mes completo."""
         budget = MonthlyBudget(
             year=year,
@@ -94,19 +131,35 @@ class DemoProfileService:
                 CategoryBudget("Ocio", EXPENSE, 110_000, False),
                 CategoryBudget("Ahorro", EXPENSE, 150_000, True),
                 CategoryBudget("Mascota", EXPENSE, 65_000, False),
-                CategoryBudget("Tarjeta demo", EXPENSE, 180_000, True),
+                CategoryBudget(
+                    "Tarjeta de crédito Demo",
+                    EXPENSE,
+                    180_000,
+                    True,
+                ),
             ],
         )
-        for item in self._movimientos_demo(year, month):
+        for item in self._movimientos_demo(
+            year,
+            month,
+            expense_factor,
+            extra_income,
+        ):
             budget.add_or_update_transaction(item)
         for item in self._recurrentes_demo():
             budget.add_or_update_recurring(item)
         return budget
 
     @staticmethod
-    def _movimientos_demo(year: int, month: int) -> list[Transaction]:
+    def _movimientos_demo(
+        year: int,
+        month: int,
+        expense_factor: float = 1.0,
+        extra_income: int = 0,
+    ) -> list[Transaction]:
         """Devuelve movimientos ficticios del mes demo."""
         prefix = f"{year:04d}-{month:02d}"
+        income_extra = 80_000 + extra_income
         return [
             Transaction(
                 INCOME,
@@ -119,7 +172,7 @@ class DemoProfileService:
             Transaction(
                 INCOME,
                 "Ingreso extra",
-                80_000,
+                income_extra,
                 f"{prefix}-12",
                 "Proyecto freelance demo",
                 "Transferencia",
@@ -135,7 +188,7 @@ class DemoProfileService:
             Transaction(
                 EXPENSE,
                 "Comida",
-                96_300,
+                DemoProfileService._ajustar_monto(96_300, expense_factor),
                 f"{prefix}-08",
                 "Supermercado semanal demo",
                 "Debito",
@@ -143,7 +196,7 @@ class DemoProfileService:
             Transaction(
                 EXPENSE,
                 "Comida",
-                74_800,
+                DemoProfileService._ajustar_monto(74_800, expense_factor),
                 f"{prefix}-18",
                 "Feria y abarrotes demo",
                 "Debito",
@@ -151,7 +204,7 @@ class DemoProfileService:
             Transaction(
                 EXPENSE,
                 "Transporte",
-                42_000,
+                DemoProfileService._ajustar_monto(42_000, expense_factor),
                 f"{prefix}-15",
                 "Combustible demo",
                 "Debito",
@@ -159,7 +212,7 @@ class DemoProfileService:
             Transaction(
                 EXPENSE,
                 "Salud",
-                28_000,
+                DemoProfileService._ajustar_monto(28_000, expense_factor),
                 f"{prefix}-16",
                 "Farmacia demo",
                 "Debito",
@@ -168,7 +221,7 @@ class DemoProfileService:
             Transaction(
                 EXPENSE,
                 "Servicios",
-                86_500,
+                DemoProfileService._ajustar_monto(86_500, expense_factor),
                 f"{prefix}-03",
                 "Electricidad y agua demo",
                 "Debito",
@@ -184,7 +237,7 @@ class DemoProfileService:
             Transaction(
                 EXPENSE,
                 "Ocio",
-                39_990,
+                DemoProfileService._ajustar_monto(39_990, expense_factor),
                 f"{prefix}-20",
                 "Salida familiar demo",
                 "Credito",
@@ -192,7 +245,7 @@ class DemoProfileService:
             Transaction(
                 EXPENSE,
                 "Mascota",
-                48_500,
+                DemoProfileService._ajustar_monto(48_500, expense_factor),
                 f"{prefix}-21",
                 "Alimento mascota demo",
                 "Debito",
@@ -207,13 +260,18 @@ class DemoProfileService:
             ),
             Transaction(
                 EXPENSE,
-                "Tarjeta demo",
+                "Tarjeta de crédito Demo",
                 180_000,
                 f"{prefix}-05",
-                "Pago tarjeta demo",
+                "Pago tarjeta de crédito demo",
                 "Transferencia",
             ),
         ]
+
+    @staticmethod
+    def _ajustar_monto(amount: int, factor: float) -> int:
+        """Aplica variacion ficticia y redondea a pesos enteros."""
+        return int(round(amount * factor))
 
     @staticmethod
     def _recurrentes_demo() -> list[RecurringItem]:
@@ -253,9 +311,9 @@ class DemoProfileService:
             ),
             RecurringItem(
                 EXPENSE,
-                "Tarjeta demo",
+                "Tarjeta de crédito Demo",
                 180_000,
-                "Pago tarjeta demo",
+                "Pago tarjeta de crédito demo",
                 5,
                 "Transferencia",
             ),
@@ -297,7 +355,7 @@ class DemoProfileService:
         return [
             Debt(
                 debt_id="demo-deuda-tarjeta",
-                name="Tarjeta Demo Avalancha",
+                name="Tarjeta de crédito Demo Avalancha",
                 category="tarjeta_credito",
                 current_balance=1_240_000,
                 previous_month_balance=1_390_000,
@@ -332,7 +390,7 @@ class DemoProfileService:
             item.account_id = (
                 card_account if item.payment_method == "Credito" else current_account
             )
-            if item.category == "Tarjeta demo":
+            if item.category == "Tarjeta de crédito Demo":
                 item.debt_id = card_debt
 
     @staticmethod

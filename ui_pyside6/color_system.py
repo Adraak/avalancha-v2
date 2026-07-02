@@ -66,6 +66,7 @@ CATEGORY_PALETTE = {
     "deudas": "#7c3aed",
     "deuda": "#7c3aed",
     "tarjeta demo": "#7c3aed",
+    "tarjeta de crédito demo": "#7c3aed",
     "tarjeta de crédito": "#7c3aed",
     "ocio": "#db2777",
     "educacion": "#0ea5e9",

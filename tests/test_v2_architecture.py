@@ -135,6 +135,39 @@ class V2ArchitectureTest(unittest.TestCase):
 
         self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
 
+    def test_dashboard_ui_no_importa_storage_directo(self) -> None:
+        """Evita que el Dashboard acceda directo a almacenamiento."""
+        project_root = Path(__file__).resolve().parents[1]
+        dashboard = (
+            project_root / "ui_pyside6" / "pages" / "dashboard_page.py"
+        ).read_text(encoding="utf-8")
+
+        self.assertNotIn("BudgetRepository", dashboard)
+        self.assertNotIn("avalancha.storage", dashboard)
+        self.assertNotIn("json.", dashboard)
+
+    def test_dashboard_ui_usa_color_system(self) -> None:
+        """Confirma que colores visuales vienen del sistema central."""
+        project_root = Path(__file__).resolve().parents[1]
+        dashboard = (
+            project_root / "ui_pyside6" / "pages" / "dashboard_page.py"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("ui_pyside6.color_system", dashboard)
+
+    def test_dashboard_alertas_usan_texto_limpio(self) -> None:
+        """Evita marcadores visuales problemáticos en alertas."""
+        project_root = Path(__file__).resolve().parents[1]
+        dashboard = (
+            project_root / "ui_pyside6" / "pages" / "dashboard_page.py"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("_alert_title_text", dashboard)
+        old_detail_text = "Detalle " + "abajo"
+        self.assertNotIn(old_detail_text, dashboard)
+        self.assertNotIn("{[", dashboard)
+        self.assertNotIn("[{", dashboard)
+
 
 if __name__ == "__main__":
     unittest.main()

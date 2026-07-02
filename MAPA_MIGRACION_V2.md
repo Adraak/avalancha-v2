@@ -567,12 +567,164 @@ mediante `color_system.py`.
 - Visualización financiera V2: 65% de una primera versión ejecutiva.
 - Proyecto V2 completo: 66% aproximado.
 
+## Etapa 14.1 - Dashboard con gráficos y alertas
+
+### Módulos ajustados
+
+- `ui_pyside6/pages/dashboard_page.py`: incorpora gráfico vertical nativo para
+  ingresos versus gastos y mantiene barras horizontales para gastos y
+  presupuesto versus gasto.
+- `services/dashboard_visual_service.py`: se mantiene como fuente de datos
+  preparados del Dashboard.
+- `services/financial_alert_service.py`: entrega alertas financieras visibles.
+- `tests/test_v2_dashboard_visual_service.py`: valida datos de gráficos y
+  aislamiento por `data_dir`.
+- `tests/test_v2_financial_alert_service.py`: valida alerta de deuda alta.
+- `tests/test_v2_architecture.py`: verifica que Dashboard no importe storage y
+  use `color_system.py`.
+
+### Ajuste final de Resumen
+
+- `ui_pyside6/main_window.py`: muestra `Resumen` como primera opcion del menu.
+- `ui_pyside6/pages/dashboard_page.py`: renderiza tarjetas superiores, gastos
+  por categoria, ingresos/gastos/flujo libre, evolucion de flujo libre,
+  gastos por clase y alertas.
+- `services/dashboard_visual_service.py`: entrega evolucion historica y clases
+  de gasto sin calcular reglas en la UI.
+- `services/financial_alert_service.py`: agrega alerta de presupuesto sobre
+  90% junto con alertas de imprevistos.
+
+### Flujo de arquitectura
+
+`PySide6 -> DashboardVisualService -> FinancialMetrics / BudgetRepository`
+
+La UI renderiza gráficos y traduce estados a colores. Los servicios entregan
+métricas, porcentajes, rankings y alertas.
+
+### Decisión técnica
+
+PyQtGraph no está instalado. La primera versión usa gráficos nativos PySide6
+para evitar dependencias nuevas y mantener el tablero estable.
+
 ### Riesgos pendientes
 
 - Movimientos aun no permite seleccionar deuda asociada desde el dialogo V2.
-- Dashboard debe pasar de vista basica a tablero consolidado.
+- Resumen queda como tablero consolidado inicial; aun no tiene interaccion
+  avanzada en graficos.
 - La persistencia definitiva sigue usando `BudgetRepository` heredado como
   adaptador temporal.
+
+### Ajuste fijo versus variable
+
+- `DashboardVisualService` separa categorias variables de pagos fijos usando
+  `is_fixed` del reporte financiero, que ya considera categorias fijas y
+  recurrentes activos. Como respaldo inicial tambien aplica una lista
+  normalizada de categorias fijas frecuentes: arriendo, chatgpt, spotify,
+  internet, servicios, fondo solidario, tarjeta de credito y dante.
+- `Presupuesto variable` muestra solo gastos controlables con semaforo de uso.
+- `Pagos fijos del mes` muestra obligaciones con estado de cumplimiento y
+  totales esperado/pagado/pendiente.
+- `FinancialAlertService` ignora categorias fijas en alertas de presupuesto
+  excedido o sobre 90%, evitando falsos criticos por pagos cumplidos.
+- Pendiente futuro: modulo de obligaciones mensuales con vencimientos y alertas
+  de atraso.
+- Pendiente futuro: transferencias internas separadas de ingresos/gastos,
+  presupuesto, flujo libre y graficos.
+
+## Roadmap inmediato posterior a 14.1
+
+La Etapa 14.1 deja una clasificacion inicial fijo/variable en
+`DashboardVisualService`, pero esa regla es transitoria. Antes de seguir con
+transferencias internas, pago correcto de deudas y analisis temporal, Avalancha
+necesita un modulo formal de categorias.
+
+| Etapa | Nombre |
+| ----: | ------ |
+| 14.1 | Resumen Visual |
+| 14.2 | Gestion de Categorias |
+| 14.3 | Transferencias internas |
+| 14.4 | Pago correcto de deudas/tarjetas |
+| 14.5 | Trazabilidad de deuda |
+| 14.6 | Analisis temporal de deudas |
+
+### Etapa 14.2 - Gestion de Categorias
+
+Objetivo futuro: permitir que el usuario administre las categorias que afectan
+movimientos, presupuestos, reportes, Resumen Visual, alertas, imprevistos y
+clasificacion fijo/variable.
+
+Alcance propuesto:
+
+- crear categorias;
+- editar categorias;
+- desactivar categorias;
+- impedir borrado fisico si una categoria tiene movimientos asociados;
+- definir tipo: ingreso, gasto o ambos si se decide permitirlo;
+- definir clase: fija o variable;
+- reutilizar categorias en movimientos, presupuestos, reportes y alertas.
+
+Modelo conceptual sugerido, aun no implementado:
+
+- `id`
+- `nombre`
+- `tipo`
+- `clase`
+- `activa`
+- `color_key`
+- `created_at`
+- `updated_at`
+
+Regla futura: las categorias con movimientos asociados no deben eliminarse
+fisicamente. Deben desactivarse para preservar el historial financiero.
+
+## Roadmap futuro - Analisis temporal de deudas
+
+### Diagnostico arquitectonico
+
+El analisis temporal de deudas queda registrado como mejora futura, pero no se
+implementa en esta etapa porque la trazabilidad actual no alcanza para graficos
+confiables.
+
+El sistema actual permite:
+
+- listar deudas y calcular indicadores basicos desde `DebtService`;
+- conocer saldo actual y saldo del mes anterior;
+- vincular movimientos a una deuda mediante `debt_id`;
+- asociar movimientos a cuenta financiera mediante `cuenta_id`;
+- sumar pagos historicos aproximados con `BudgetRepository.debt_payment_totals()`.
+
+El sistema actual no permite todavia:
+
+- distinguir formalmente pago de deuda versus gasto comun;
+- separar compra con tarjeta y pago posterior de tarjeta sin riesgo de doble
+  conteo;
+- registrar saldo anterior y saldo posterior por pago;
+- reconstruir una serie historica mensual por deuda;
+- distinguir capital, interes, ajuste y pago minimo;
+- separar transferencias internas de ingresos/gastos.
+
+### Cambios de modelo necesarios
+
+Se recomienda crear mas adelante:
+
+- `DebtPayment`: registro formal de pago con `deuda_id`, `cuenta_origen_id`,
+  fecha, monto pagado, tipo de pago, saldo anterior, saldo posterior, interes
+  estimado y nota.
+- `DebtSnapshot`: punto historico de saldo con `deuda_id`, fecha, saldo y
+  origen (`manual`, `pago`, `cierre_mensual`, `ajuste`).
+- `DebtAnalysisService`: servicio de consulta para evolucion de saldos, pagos
+  por mes, tendencia por deuda y resumen de deuda total.
+
+### Orden recomendado
+
+1. `Etapa 14.2 - Gestion de Categorias`.
+2. `Etapa 14.3 - Transferencias internas`.
+3. `Etapa 14.4 - Pago correcto de deudas/tarjetas`.
+4. `Etapa 14.5 - Trazabilidad de deuda`.
+5. `Etapa 14.6 - Analisis temporal de deudas`.
+
+El Dashboard solo deberia consumir una sintesis: deuda total, variacion mensual
+y tendencia. El detalle con curvas y pagos debe vivir dentro del modulo Deudas.
 
 ### Tests agregados
 

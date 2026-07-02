@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import tempfile
 import unittest
+from datetime import date
 from pathlib import Path
 
 from avalancha.models import EXPENSE, MonthlyBudget, Transaction
 from avalancha.storage import BudgetRepository
+from services.dashboard_visual_service import DashboardVisualService
 from services.demo_profile_service import DemoProfileService
 from services.profile_service import PERFIL_DEMO, PERFIL_PERSONAL, ProfileService
 
@@ -42,6 +44,7 @@ class DemoProfileServiceTest(unittest.TestCase):
         budget = repository.load(2026, 6)
 
         self.assertEqual(profile.id, PERFIL_DEMO)
+        self.assertGreaterEqual(len(repository.list_months()), 6)
         self.assertGreaterEqual(len(repository.load_accounts()), 4)
         self.assertGreaterEqual(len(repository.load_debts()), 2)
         self.assertGreaterEqual(len(budget.transactions), 10)
@@ -56,6 +59,42 @@ class DemoProfileServiceTest(unittest.TestCase):
 
         self.assertNotIn("Dato real sensible", descriptions)
         self.assertIn("demo", descriptions.casefold())
+
+    def test_demo_usa_nombre_claro_para_tarjeta(self) -> None:
+        """Evita etiquetas demo poco claras en datos ficticios."""
+        profile = self.demo_service.abrir_demo()
+        repository = BudgetRepository(profile.data_dir)
+        budget = repository.load(2026, 6)
+        names = " ".join(
+            [item.name for item in budget.categories]
+            + [item.category for item in budget.transactions]
+            + [item.name for item in repository.load_debts()]
+        )
+
+        self.assertIn("Tarjeta de crédito Demo", names)
+        legacy_name = "Tarjeta " + "demo"
+        self.assertNotIn(legacy_name, names)
+
+    def test_periodo_demo_usa_ultimo_mes_disponible(self) -> None:
+        """Evita que el demo abra un mes vacio si cambia la fecha real."""
+        self.demo_service.abrir_demo()
+
+        period = self.profile_service.obtener_periodo_trabajo(
+            PERFIL_DEMO,
+            date(2026, 7, 1),
+        )
+
+        self.assertEqual(period, (2026, 6))
+
+    def test_demo_tiene_historial_para_evolucion_flujo(self) -> None:
+        """El demo entrega varios puntos para graficar flujo libre."""
+        profile = self.demo_service.abrir_demo()
+        service = DashboardVisualService(data_dir=profile.data_dir)
+
+        data = service.obtener_dashboard(2026, 6)
+
+        self.assertEqual(len(data.evolucion_flujo), 6)
+        self.assertEqual(data.evolucion_flujo[-1].mes, "2026-06")
 
     def test_regenerar_demo_mantiene_separacion(self) -> None:
         """Regenerar demo no modifica el perfil personal."""

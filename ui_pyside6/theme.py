@@ -12,9 +12,11 @@ from ui_pyside6.color_system import (
 
 
 COLOR_FONDO = "#f3f6f8"
-COLOR_MENU = "#12324a"
-COLOR_MENU_ACTIVO = "#1f6f8b"
-COLOR_MENU_HOVER = "#19465f"
+COLOR_MENU = "#071526"
+COLOR_MENU_ACTIVO = "#17457f"
+COLOR_MENU_HOVER = "#10233a"
+COLOR_MENU_TEXTO = "#d8e3ee"
+COLOR_MENU_ACTIVO_TEXTO = "#ffffff"
 FUENTE_BASE = "Segoe UI"
 
 
@@ -54,15 +56,15 @@ def hoja_estilos() -> str:
 
     #SideMenu {{
         background: {COLOR_MENU};
-        border-right: 1px solid {COLOR_MENU};
+        border-right: 1px solid #0b1f35;
     }}
 
     QPushButton[menuButton="true"] {{
         background: transparent;
-        color: #e9f0f4;
+        color: {COLOR_MENU_TEXTO};
         border: none;
-        border-radius: 8px;
-        padding: 11px 14px;
+        border-radius: 9px;
+        padding: 12px 14px;
         text-align: left;
         font-size: 13px;
         font-weight: 600;
@@ -74,13 +76,27 @@ def hoja_estilos() -> str:
 
     QPushButton[menuButton="true"]:checked {{
         background: {COLOR_MENU_ACTIVO};
-        color: #ffffff;
+        color: {COLOR_MENU_ACTIVO_TEXTO};
+    }}
+
+    QPushButton[secondaryButton="true"] {{
+        background: {COLOR_PANEL};
+        color: {COLOR_TEXTO};
+        border: 1px solid {COLOR_BORDE};
+        border-radius: 8px;
+        padding: 8px 14px;
+        font-size: 12px;
+        font-weight: 600;
+    }}
+
+    QPushButton[secondaryButton="true"]:hover {{
+        background: #f8fbff;
+        border-color: {COLOR_ACENTO};
     }}
 
     #ContentPanel {{
-        background: {COLOR_PANEL};
-        border: 1px solid {COLOR_BORDE};
-        border-radius: 10px;
+        background: transparent;
+        border: none;
     }}
 
     #PageTitle {{

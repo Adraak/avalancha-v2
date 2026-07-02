@@ -39,7 +39,15 @@ class SortableItem(QTableWidgetItem):
 class MovementsPage(QWidget):
     """Pantalla CRUD de movimientos usando MovementService."""
 
-    HEADERS = ["Fecha", "Categoria", "Cuenta", "Tipo", "Descripcion", "Monto"]
+    HEADERS = [
+        "Fecha",
+        "Categoría",
+        "Cuenta",
+        "Tipo",
+        "Descripcion",
+        "Clase",
+        "Monto",
+    ]
 
     def __init__(self, service: MovementService | None = None) -> None:
         """Inicializa la pagina funcional de movimientos."""
@@ -184,13 +192,14 @@ class MovementsPage(QWidget):
                 (account_name, account_name.casefold()),
                 (movement.tipo.capitalize(), movement.tipo),
                 (movement.descripcion, movement.descripcion.casefold()),
+                (movement.clase, movement.clase.casefold()),
                 (self._format_clp(movement.monto), movement.monto),
             ]
             for column, (text, sort_value) in enumerate(values):
                 item = SortableItem(text, sort_value)
                 if column == 0:
                     item.setData(Qt.ItemDataRole.UserRole, movement.id)
-                if column == 5:
+                if column == 6:
                     item.setTextAlignment(
                         Qt.AlignmentFlag.AlignRight
                         | Qt.AlignmentFlag.AlignVCenter,
@@ -222,4 +231,3 @@ class MovementsPage(QWidget):
     def _show_info(self, message: str) -> None:
         """Muestra un mensaje informativo."""
         QMessageBox.information(self, "Movimientos", message)
-

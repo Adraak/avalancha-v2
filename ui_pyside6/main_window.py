@@ -22,7 +22,7 @@ from services.budget_service import BudgetService
 from services.demo_profile_service import DemoProfileService
 from services.debt_service import DebtService
 from services.movement_service import MovementService
-from services.profile_service import ProfileService
+from services.profile_service import PERFIL_DEMO, ProfileService
 from services.reconciliation_service import ReconciliationService
 from services.report_service import ReportService
 from services.settings_service import SettingsService
@@ -49,15 +49,22 @@ class NavigationItem:
 class MainWindow(QMainWindow):
     """Chasis visual principal de Avalancha V2 en PySide6."""
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        profile_service: ProfileService | None = None,
+        demo_service: DemoProfileService | None = None,
+    ) -> None:
         """Inicializa la ventana principal y su navegacion."""
         super().__init__()
         self.setWindowTitle("Avalancha V2")
         self.resize(1200, 750)
         self.setMinimumSize(980, 640)
         self.setStyleSheet(hoja_estilos())
-        self.profile_service = ProfileService()
-        self.demo_service = DemoProfileService(self.profile_service)
+        self.profile_service = profile_service or ProfileService()
+        self.demo_service = demo_service or DemoProfileService(
+            self.profile_service,
+        )
+        self._ensure_active_demo_data()
         self.active_profile = self.profile_service.obtener_activo()
         self.profile_name = self.active_profile.nombre
         self.navigation_buttons: list[QPushButton] = []
@@ -68,6 +75,12 @@ class MainWindow(QMainWindow):
         self.profile_label = QLabel()
         self._build_ui()
         self._select_section(0)
+
+    def _ensure_active_demo_data(self) -> None:
+        """Asegura datos demo completos si el perfil activo es Demo."""
+        active = self.profile_service.obtener_activo()
+        if active.id == PERFIL_DEMO:
+            self.demo_service.asegurar_demo()
 
     def _build_ui(self) -> None:
         """Construye la estructura general de la ventana."""
@@ -147,7 +160,34 @@ class MainWindow(QMainWindow):
             layout.addWidget(button)
 
         layout.addStretch(1)
+        layout.addWidget(self._build_profile_badge())
         return menu
+
+    def _build_profile_badge(self) -> QWidget:
+        """Construye bloque inferior con perfil activo."""
+        badge = QFrame()
+        badge.setObjectName("ProfileBadge")
+        badge.setStyleSheet(
+            """
+            #ProfileBadge {
+                background: #0d2035;
+                border: 1px solid #173653;
+                border-radius: 10px;
+            }
+            """
+        )
+        layout = QVBoxLayout(badge)
+        layout.setContentsMargins(12, 10, 12, 10)
+        layout.setSpacing(3)
+
+        label = QLabel("Perfil activo")
+        label.setStyleSheet("color: #9fb2c7; font-size: 11px;")
+        value = QLabel(self.profile_name)
+        value.setStyleSheet("color: #ffffff; font-size: 13px; font-weight: 700;")
+
+        layout.addWidget(label)
+        layout.addWidget(value)
+        return badge
 
     def _build_content_area(self) -> QWidget:
         """Construye el panel central dinamico."""
@@ -192,11 +232,24 @@ class MainWindow(QMainWindow):
         """Devuelve las paginas disponibles para el perfil activo."""
         profile = self.profile_service.obtener_activo()
         data_dir = profile.data_dir
-        movement_service = MovementService(data_dir=data_dir)
-        budget_service = BudgetService(data_dir=data_dir)
+        year, month = self.profile_service.obtener_periodo_trabajo(profile.id)
+        movement_service = MovementService(
+            data_dir=data_dir,
+            year=year,
+            month=month,
+        )
+        budget_service = BudgetService(
+            data_dir=data_dir,
+            year=year,
+            month=month,
+        )
         account_service = AccountService(data_dir=data_dir)
         debt_service = DebtService(data_dir=data_dir)
-        reconciliation_service = ReconciliationService(data_dir=data_dir)
+        reconciliation_service = ReconciliationService(
+            data_dir=data_dir,
+            year=year,
+            month=month,
+        )
         settings_service = SettingsService(
             config_dir=profile.config_dir,
             reports_dir=profile.reports_dir,
@@ -214,18 +267,21 @@ class MainWindow(QMainWindow):
         )
         profiles_page.profile_changed.connect(self._reload_profile)
         return [
-            NavigationItem("Dashboard", DashboardPage(data_dir=data_dir)),
+            NavigationItem(
+                "Resumen",
+                DashboardPage(data_dir=data_dir, year=year, month=month),
+            ),
             NavigationItem("Movimientos", MovementsPage(movement_service)),
+            NavigationItem("Presupuestos", BudgetsPage(budget_service)),
             NavigationItem("Cuentas", AccountsPage(account_service)),
             NavigationItem("Deudas", DebtsPage(debt_service)),
-            NavigationItem("Presupuestos", BudgetsPage(budget_service)),
             NavigationItem("Reportes", ReportsPage(report_service)),
             NavigationItem(
                 "Conciliacion",
                 ReconciliationPage(reconciliation_service),
             ),
             NavigationItem("Perfiles", profiles_page),
-            NavigationItem("Configuracion", SettingsPage(settings_service)),
+            NavigationItem("Configuración", SettingsPage(settings_service)),
         ]
 
     def _select_section(self, index: int) -> None:

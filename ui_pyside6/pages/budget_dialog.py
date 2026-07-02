@@ -92,12 +92,12 @@ class BudgetDialog(QDialog):
         self.notes_input.setFixedHeight(90)
 
         form.addRow("Nombre", self.name_input)
-        form.addRow("Categoria", self.category_input)
+        form.addRow("Categoría", self.category_input)
         form.addRow("Monto mensual", self.amount_input)
         form.addRow("Moneda", self.currency_input)
         form.addRow("Fecha inicio", self.start_date_input)
         form.addRow("", self.end_enabled_input)
-        form.addRow("Fecha termino", self.end_date_input)
+        form.addRow("Fecha término", self.end_date_input)
         form.addRow("Estado", self.active_input)
         form.addRow("Observaciones", self.notes_input)
 
@@ -135,4 +135,3 @@ class BudgetDialog(QDialog):
     def _to_qdate(value: date) -> QDate:
         """Convierte date de Python a QDate."""
         return QDate(value.year, value.month, value.day)
-

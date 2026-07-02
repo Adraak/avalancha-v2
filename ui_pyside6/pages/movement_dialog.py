@@ -6,6 +6,7 @@ from datetime import date
 
 from PySide6.QtCore import QDate
 from PySide6.QtWidgets import (
+    QCheckBox,
     QComboBox,
     QDateEdit,
     QDialog,
@@ -42,6 +43,7 @@ class MovementDialog(QDialog):
         self.account_input = QComboBox()
         self.amount_input = QLineEdit()
         self.description_input = QLineEdit()
+        self.unexpected_input = QCheckBox("Marcar como imprevisto")
         self._build_ui()
         self._load_accounts()
         self._load_initial_values()
@@ -55,6 +57,7 @@ class MovementDialog(QDialog):
             "cuenta_id": self.account_input.currentData(),
             "monto": self.amount_input.text(),
             "descripcion": self.description_input.text(),
+            "imprevisto": self.unexpected_input.isChecked(),
         }
 
     def _build_ui(self) -> None:
@@ -75,10 +78,11 @@ class MovementDialog(QDialog):
 
         form.addRow("Fecha", self.date_input)
         form.addRow("Tipo", self.type_input)
-        form.addRow("Categoria", self.category_input)
+        form.addRow("Categoría", self.category_input)
         form.addRow("Cuenta", self.account_input)
         form.addRow("Monto", self.amount_input)
-        form.addRow("Descripcion", self.description_input)
+        form.addRow("Descripción", self.description_input)
+        form.addRow("Imprevisto", self.unexpected_input)
 
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Save
@@ -131,9 +135,9 @@ class MovementDialog(QDialog):
 
         self.amount_input.setText(str(self.movement.monto))
         self.description_input.setText(self.movement.descripcion)
+        self.unexpected_input.setChecked(self.movement.imprevisto)
 
     @staticmethod
     def _to_qdate(value: date) -> QDate:
         """Convierte una fecha Python a QDate."""
         return QDate(value.year, value.month, value.day)
-

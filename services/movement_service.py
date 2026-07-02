@@ -57,6 +57,7 @@ class MovementService:
         cuenta_id: str,
         monto: int | str,
         descripcion: str = "",
+        imprevisto: bool = False,
     ) -> Movimiento:
         """Crea y persiste un movimiento nuevo."""
         movimiento = Movimiento(
@@ -68,6 +69,8 @@ class MovementService:
             monto=self._normalizar_monto(monto),
             cuenta_id=cuenta_id,
             medio_pago=self._medio_pago_por_cuenta(cuenta_id),
+            imprevisto=bool(imprevisto),
+            clase=self._clase_por_flags(bool(imprevisto), None),
         )
         self._validar_movimiento(movimiento)
         budget = self.repository.load(self.year, self.month)
@@ -84,10 +87,15 @@ class MovementService:
         cuenta_id: str,
         monto: int | str,
         descripcion: str = "",
+        imprevisto: bool | None = None,
     ) -> Movimiento:
         """Actualiza un movimiento existente."""
-        if not self._existe_movimiento(movimiento_id):
+        original = self._obtener_transaccion(movimiento_id)
+        if original is None:
             raise ValueError("El movimiento no existe.")
+        es_imprevisto = (
+            original.is_unexpected if imprevisto is None else bool(imprevisto)
+        )
         movimiento = Movimiento(
             id=movimiento_id,
             fecha=self._normalizar_fecha(fecha),
@@ -97,6 +105,10 @@ class MovementService:
             monto=self._normalizar_monto(monto),
             cuenta_id=cuenta_id,
             medio_pago=self._medio_pago_por_cuenta(cuenta_id),
+            recurrente_id=original.recurring_id,
+            deuda_id=original.debt_id,
+            imprevisto=es_imprevisto,
+            clase=self._clase_por_flags(es_imprevisto, original.recurring_id),
         )
         self._validar_movimiento(movimiento)
         budget = self.repository.load(self.year, self.month)
@@ -126,6 +138,7 @@ class MovementService:
                     movimiento.descripcion,
                     str(movimiento.monto),
                     cuentas.get(movimiento.cuenta_id, ""),
+                    movimiento.clase,
                 ]
             ).casefold()
             if filtro in contenido:
@@ -173,11 +186,18 @@ class MovementService:
 
     def _existe_movimiento(self, movimiento_id: str) -> bool:
         """Indica si existe un movimiento en el mes activo."""
+        return self._obtener_transaccion(movimiento_id) is not None
+
+    def _obtener_transaccion(
+        self,
+        movimiento_id: str,
+    ) -> Transaction | None:
+        """Devuelve una transaccion heredada por id si existe."""
         budget = self.repository.load(self.year, self.month)
-        return any(
-            item.transaction_id == movimiento_id
-            for item in budget.transactions
-        )
+        for item in budget.transactions:
+            if item.transaction_id == movimiento_id:
+                return item
+        return None
 
     def _desde_transaccion(self, transaction: Transaction) -> Movimiento:
         """Convierte una transaccion heredada al modelo V2."""
@@ -193,7 +213,7 @@ class MovementService:
             recurrente_id=transaction.recurring_id,
             deuda_id=transaction.debt_id,
             imprevisto=transaction.is_unexpected,
-            clase="Imprevisto" if transaction.is_unexpected else "Normal",
+            clase=self._clase_movimiento(transaction),
         )
 
     def _a_transaccion(self, movimiento: Movimiento) -> Transaction:
@@ -234,6 +254,26 @@ class MovementService:
             "ahorro": "Transferencia",
         }
         return medios.get(cuenta.account_type, "Otro")
+
+    @staticmethod
+    def _clase_movimiento(transaction: Transaction) -> str:
+        """Clasifica visualmente una transaccion heredada."""
+        return MovementService._clase_por_flags(
+            transaction.is_unexpected,
+            transaction.recurring_id,
+        )
+
+    @staticmethod
+    def _clase_por_flags(
+        imprevisto: bool,
+        recurrente_id: str | None,
+    ) -> str:
+        """Prioriza Imprevisto sobre Recurrente para evitar ambiguedad."""
+        if imprevisto:
+            return "Imprevisto"
+        if recurrente_id:
+            return "Recurrente"
+        return "Normal"
 
     @staticmethod
     def _normalizar_fecha(value: date | str) -> date:

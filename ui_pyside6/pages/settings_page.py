@@ -34,7 +34,7 @@ class SettingsPage(QWidget):
         self.moneda_combo = QComboBox()
         self.apariencia_combo = QComboBox()
         self.cifrado_check = QCheckBox("Mantener reportes cifrados")
-        self.sincronizacion_check = QCheckBox("Preparar sincronizacion futura")
+        self.sincronizacion_check = QCheckBox("Preparar sincronización futura")
         self.estado_label = QLabel("")
         self._build_ui()
         self.reload()
@@ -42,7 +42,7 @@ class SettingsPage(QWidget):
     def reload(self) -> None:
         """Recarga valores desde el servicio."""
         self._load_config(self.service.cargar_configuracion())
-        self.estado_label.setText("Configuracion cargada.")
+        self.estado_label.setText("Configuración cargada.")
 
     def save(self) -> None:
         """Solicita al servicio validar y guardar configuracion."""
@@ -52,13 +52,13 @@ class SettingsPage(QWidget):
             self._show_error(str(exc))
             return
         self._load_config(config)
-        self.estado_label.setText("Configuracion guardada.")
+        self.estado_label.setText("Configuración guardada.")
 
     def restore_defaults(self) -> None:
         """Restaura valores por defecto despues de confirmar."""
         response = QMessageBox.question(
             self,
-            "Restaurar configuracion",
+            "Restaurar configuración",
             "Restaurar valores por defecto del perfil activo?",
         )
         if response != QMessageBox.StandardButton.Yes:
@@ -81,12 +81,12 @@ class SettingsPage(QWidget):
         layout.setContentsMargins(28, 28, 28, 28)
         layout.setSpacing(16)
 
-        title = QLabel("Configuracion")
+        title = QLabel("Configuración")
         title.setObjectName("PageTitle")
 
         subtitle = QLabel(
             "Preferencias locales del perfil activo. "
-            "La sincronizacion queda solo preparada para una etapa futura.",
+            "La sincronización queda solo preparada para una etapa futura.",
         )
         subtitle.setObjectName("PageSubtitle")
         subtitle.setWordWrap(True)
@@ -104,7 +104,7 @@ class SettingsPage(QWidget):
             self.respaldo_input,
             self.select_backup_folder,
         ))
-        form.addRow("Sincronizacion", self.sincronizacion_check)
+        form.addRow("Sincronización", self.sincronizacion_check)
 
         buttons = QHBoxLayout()
         save_button = QPushButton("Guardar")
@@ -184,4 +184,4 @@ class SettingsPage(QWidget):
 
     def _show_error(self, message: str) -> None:
         """Muestra errores de validacion generados por el servicio."""
-        QMessageBox.warning(self, "Configuracion", message)
+        QMessageBox.warning(self, "Configuración", message)

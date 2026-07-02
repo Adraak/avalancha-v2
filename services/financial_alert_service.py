@@ -23,7 +23,6 @@ class FinancialAlertService:
         self,
         indicadores: Any,
         categorias: list[dict[str, Any]],
-        umbral_imprevistos: int = 100_000,
     ) -> list[FinancialAlert]:
         """Construye alertas simples a partir de indicadores mensuales."""
         alertas: list[FinancialAlert] = []
@@ -68,6 +67,7 @@ class FinancialAlertService:
             item["name"]
             for item in categorias
             if item.get("status") == "sobrepasado"
+            and not bool(item.get("is_fixed", False))
         ]
         if excedidas:
             alertas.append(
@@ -82,13 +82,49 @@ class FinancialAlertService:
                 ),
             )
 
-        if indicadores.gastos_imprevistos > umbral_imprevistos:
+        en_riesgo = [
+            str(item.get("name", ""))
+            for item in categorias
+            if item.get("status") != "sobrepasado"
+            and not bool(item.get("is_fixed", False))
+            and float(item.get("usage", 0.0) or 0.0) >= 90
+        ]
+        if en_riesgo:
             alertas.append(
                 FinancialAlert(
                     nivel="advertencia",
-                    titulo="Imprevistos altos",
-                    mensaje="Los gastos imprevistos superan el umbral mensual.",
-                    metrica=indicadores.gastos_imprevistos,
+                    titulo="Presupuesto sobre 90%",
+                    mensaje=(
+                        "Categorías cerca del límite: "
+                        + ", ".join(en_riesgo)
+                    ),
+                    metrica=len(en_riesgo),
+                ),
+            )
+
+        porcentaje_imprevistos = self._porcentaje_imprevistos(indicadores)
+        if porcentaje_imprevistos > 35:
+            alertas.append(
+                FinancialAlert(
+                    nivel="critico",
+                    titulo="Gastos imprevistos altos",
+                    mensaje=(
+                        "Este mes los gastos imprevistos representan "
+                        f"el {porcentaje_imprevistos:.1f}% de tus gastos."
+                    ),
+                    metrica=porcentaje_imprevistos,
+                ),
+            )
+        elif porcentaje_imprevistos > 20:
+            alertas.append(
+                FinancialAlert(
+                    nivel="advertencia",
+                    titulo="Gastos imprevistos altos",
+                    mensaje=(
+                        "Este mes los gastos imprevistos representan "
+                        f"el {porcentaje_imprevistos:.1f}% de tus gastos."
+                    ),
+                    metrica=porcentaje_imprevistos,
                 ),
             )
 
@@ -102,3 +138,12 @@ class FinancialAlertService:
             )
 
         return alertas
+
+    @staticmethod
+    def _porcentaje_imprevistos(indicadores: Any) -> float:
+        """Calcula peso de imprevistos sin generar alertas falsas."""
+        gastos = int(getattr(indicadores, "gastos_reales", 0) or 0)
+        imprevistos = int(getattr(indicadores, "gastos_imprevistos", 0) or 0)
+        if gastos <= 0 or imprevistos <= 0:
+            return 0.0
+        return round((imprevistos / gastos) * 100, 1)
