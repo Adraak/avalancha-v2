@@ -649,33 +649,59 @@ necesita un modulo formal de categorias.
 
 ### Etapa 14.2 - Gestion de Categorias
 
-Objetivo futuro: permitir que el usuario administre las categorias que afectan
-movimientos, presupuestos, reportes, Resumen Visual, alertas, imprevistos y
-clasificacion fijo/variable.
+Estado: implementada para revision, pendiente de commit de cierre.
 
-Alcance propuesto:
+Diagnostico:
 
-- crear categorias;
-- editar categorias;
-- desactivar categorias;
-- impedir borrado fisico si una categoria tiene movimientos asociados;
-- definir tipo: ingreso, gasto o ambos si se decide permitirlo;
-- definir clase: fija o variable;
-- reutilizar categorias en movimientos, presupuestos, reportes y alertas.
+- Las categorias estaban guardadas como strings en `Transaction.category` y
+  `CategoryBudget.name`.
+- Los presupuestos reutilizaban `CategoryBudget` del repositorio heredado.
+- `MovementService.obtener_categorias()` leia categorias desde el presupuesto
+  mensual.
+- `DashboardVisualService` separaba fijo/variable con `is_fixed`, recurrentes
+  y fallback por nombres normalizados.
+- `FinancialAlertService` solo recibia `is_fixed` dentro del reporte de
+  categorias.
 
-Modelo conceptual sugerido, aun no implementado:
+Decision tecnica:
 
-- `id`
-- `nombre`
-- `tipo`
-- `clase`
-- `activa`
-- `color_key`
-- `created_at`
-- `updated_at`
+- Se implementa catalogo formal por perfil con compatibilidad por nombre.
+- No se agrega `categoria_id` a movimientos todavia para evitar migracion
+  destructiva.
+- `categorias.json` se guarda dentro del `data_dir` del perfil activo y queda
+  fuera de Git por las reglas existentes de datos.
 
-Regla futura: las categorias con movimientos asociados no deben eliminarse
-fisicamente. Deben desactivarse para preservar el historial financiero.
+Archivos agregados:
+
+- `core/models/categoria.py`
+- `services/category_service.py`
+- `ui_pyside6/pages/categories_page.py`
+- `ui_pyside6/pages/category_dialog.py`
+- `tests/test_v2_category_service.py`
+
+Archivos integrados:
+
+- `services/movement_service.py`
+- `services/budget_service.py`
+- `services/dashboard_visual_service.py`
+- `services/financial_alert_service.py`
+- `services/demo_profile_service.py`
+- `ui_pyside6/main_window.py`
+- `ui_pyside6/pages/movement_dialog.py`
+- `ui_pyside6/pages/budget_dialog.py`
+- `tests/test_v2_architecture.py`
+
+Reglas implementadas:
+
+- crear, editar, desactivar y reactivar categorias;
+- validar nombre, tipo y clase;
+- evitar duplicados activos compatibles por nombre y tipo;
+- listar por tipo incluyendo categorias `ambos`;
+- ocultar inactivas en formularios nuevos;
+- permitir inactiva historica al editar datos antiguos;
+- no borrar fisicamente categorias con asociaciones;
+- sincronizar categorias base y categorias heredadas si falta catalogo formal;
+- mantener Personal y Demo aislados mediante `data_dir` independiente.
 
 ## Roadmap futuro - Analisis temporal de deudas
 

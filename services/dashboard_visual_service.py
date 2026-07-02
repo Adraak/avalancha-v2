@@ -10,6 +10,7 @@ import unicodedata
 
 from avalancha.storage import BudgetRepository
 from core.financial_metrics import FinancialMetrics
+from services.category_service import CategoryService
 from services.financial_alert_service import (
     FinancialAlert,
     FinancialAlertService,
@@ -129,11 +130,18 @@ class DashboardVisualService:
         repository: BudgetRepository | None = None,
         metrics: FinancialMetrics | None = None,
         alert_service: FinancialAlertService | None = None,
+        category_service: CategoryService | None = None,
     ) -> None:
         """Inicializa el servicio con persistencia del perfil activo."""
         self.repository = repository or BudgetRepository(data_dir)
         self.metrics = metrics or FinancialMetrics()
-        self.alert_service = alert_service or FinancialAlertService()
+        self.category_service = category_service or CategoryService(
+            data_dir=self.repository.data_dir,
+            repository=self.repository,
+        )
+        self.alert_service = alert_service or FinancialAlertService(
+            self.category_service,
+        )
 
     def obtener_dashboard(
         self,
@@ -161,6 +169,7 @@ class DashboardVisualService:
             budget.categories,
             budget.recurring_items,
         )
+        category_report = self._aplicar_clases_formales(category_report)
         unexpected_summary = self.obtener_resumen_imprevistos(
             budget.transactions,
         )
@@ -544,6 +553,24 @@ class DashboardVisualService:
             str(item.get("name", "")),
         )
         return name in DashboardVisualService.CATEGORIAS_FIJAS_INICIALES
+
+    def _aplicar_clases_formales(
+        self,
+        reporte_categorias: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """Aplica clase formal antes de usar fallback por nombre."""
+        rows = []
+        for item in reporte_categorias:
+            row = dict(item)
+            clase = self.category_service.clase_por_nombre(
+                str(row.get("name", "")),
+            )
+            if clase == "fija":
+                row["is_fixed"] = True
+            elif clase == "variable":
+                row["is_fixed"] = False
+            rows.append(row)
+        return rows
 
     @staticmethod
     def _normalizar_clave_categoria(value: str) -> str:

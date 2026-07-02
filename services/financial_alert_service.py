@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from services.category_service import CategoryService
+
 
 @dataclass(frozen=True, slots=True)
 class FinancialAlert:
@@ -18,6 +20,13 @@ class FinancialAlert:
 
 class FinancialAlertService:
     """Genera alertas financieras deterministicas sin depender de UI."""
+
+    def __init__(
+        self,
+        category_service: CategoryService | None = None,
+    ) -> None:
+        """Inicializa el servicio con clasificador formal opcional."""
+        self.category_service = category_service
 
     def generar_alertas(
         self,
@@ -67,7 +76,7 @@ class FinancialAlertService:
             item["name"]
             for item in categorias
             if item.get("status") == "sobrepasado"
-            and not bool(item.get("is_fixed", False))
+            and not self._es_categoria_fija(item)
         ]
         if excedidas:
             alertas.append(
@@ -86,7 +95,7 @@ class FinancialAlertService:
             str(item.get("name", ""))
             for item in categorias
             if item.get("status") != "sobrepasado"
-            and not bool(item.get("is_fixed", False))
+            and not self._es_categoria_fija(item)
             and float(item.get("usage", 0.0) or 0.0) >= 90
         ]
         if en_riesgo:
@@ -138,6 +147,15 @@ class FinancialAlertService:
             )
 
         return alertas
+
+    def _es_categoria_fija(self, item: dict[str, Any]) -> bool:
+        """Determina si una categoria debe excluirse de alertas variables."""
+        nombre = str(item.get("name", "")).strip()
+        if self.category_service is not None:
+            formal = self.category_service.es_categoria_fija(nombre)
+            if formal is not None:
+                return formal
+        return bool(item.get("is_fixed", False))
 
     @staticmethod
     def _porcentaje_imprevistos(indicadores: Any) -> float:

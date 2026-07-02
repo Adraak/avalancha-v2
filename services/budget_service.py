@@ -12,6 +12,7 @@ from avalancha.models import CategoryBudget, EXPENSE
 from avalancha.storage import BudgetRepository
 
 from core.models.presupuesto import Presupuesto
+from services.category_service import CategoryService
 from services.movement_service import MovementService
 
 
@@ -37,17 +38,23 @@ class BudgetService:
         month: int | None = None,
         repository: BudgetRepository | None = None,
         movement_service: MovementService | None = None,
+        category_service: CategoryService | None = None,
     ) -> None:
         """Inicializa el servicio para un mes presupuestario."""
         today = date.today()
         self.year = year or today.year
         self.month = month or today.month
         self.repository = repository or BudgetRepository(data_dir)
+        self.category_service = category_service or CategoryService(
+            data_dir=self.repository.data_dir,
+            repository=self.repository,
+        )
         self.movement_service = movement_service or MovementService(
             data_dir=data_dir,
             year=self.year,
             month=self.month,
             repository=self.repository,
+            category_service=self.category_service,
         )
 
     def obtener_presupuestos(self) -> list[Presupuesto]:
@@ -72,7 +79,7 @@ class BudgetService:
         presupuesto = self._crear_modelo(datos, uuid4().hex)
         self._validar_presupuesto(presupuesto)
         budget = self._load_budget()
-        budget.categories.append(self._a_categoria(presupuesto))
+        budget.categories.append(self._a_categoria_con_clase(presupuesto))
         self.repository.save(budget)
         return presupuesto
 
@@ -85,8 +92,13 @@ class BudgetService:
         budget = self._load_budget()
         index = self._find_category_index(budget.categories, presupuesto_id)
         presupuesto = self._crear_modelo(datos, presupuesto_id)
-        self._validar_presupuesto(presupuesto, presupuesto_id)
-        budget.categories[index] = self._a_categoria(presupuesto)
+        original = self._desde_categoria(budget.categories[index])
+        self._validar_presupuesto(
+            presupuesto,
+            presupuesto_id,
+            categoria_original=original.categoria,
+        )
+        budget.categories[index] = self._a_categoria_con_clase(presupuesto)
         self.repository.save(budget)
         return presupuesto
 
@@ -153,11 +165,14 @@ class BudgetService:
             )
         return filas
 
-    def categorias_disponibles(self) -> list[str]:
+    def categorias_disponibles(
+        self,
+        incluir_categoria: str | None = None,
+    ) -> list[str]:
         """Devuelve categorias disponibles para sugerir en formularios."""
-        return sorted(
-            {item.categoria for item in self.obtener_presupuestos()},
-            key=str.casefold,
+        return self.category_service.nombres_por_tipo(
+            EXPENSE,
+            incluir_nombre=incluir_categoria,
         )
 
     def _set_active(
@@ -178,6 +193,7 @@ class BudgetService:
         self,
         presupuesto: Presupuesto,
         presupuesto_id: str | None = None,
+        categoria_original: str | None = None,
     ) -> None:
         """Valida reglas de negocio del presupuesto."""
         if not presupuesto.nombre:
@@ -188,6 +204,14 @@ class BudgetService:
             raise ValueError("El monto mensual debe ser mayor que cero.")
         if not presupuesto.moneda:
             raise ValueError("La moneda es obligatoria.")
+        permitir_inactiva = (
+            categoria_original is not None
+            and presupuesto.categoria.casefold() == categoria_original.casefold()
+        )
+        self.category_service.validar_categoria_presupuesto(
+            presupuesto.categoria,
+            permitir_inactiva=permitir_inactiva,
+        )
         self._validar_conflictos(presupuesto, presupuesto_id)
 
     def _validar_conflictos(
@@ -307,6 +331,15 @@ class BudgetService:
             activo=category.active,
             observaciones=category.notes,
         )
+
+    def _a_categoria_con_clase(self, presupuesto: Presupuesto) -> CategoryBudget:
+        """Convierte presupuesto y aplica clase formal fija/variable."""
+        category = self._a_categoria(presupuesto)
+        category.is_fixed = (
+            self.category_service.es_categoria_fija(presupuesto.categoria)
+            is True
+        )
+        return category
 
     @staticmethod
     def _a_categoria(presupuesto: Presupuesto) -> CategoryBudget:

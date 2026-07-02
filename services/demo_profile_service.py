@@ -16,6 +16,7 @@ from avalancha.models import (
 )
 from avalancha.storage import BudgetRepository
 
+from services.category_service import CategoryService
 from services.profile_service import PERFIL_DEMO, PerfilAplicacion, ProfileService
 from services.reconciliation_service import ReconciliationService
 from services.report_service import ReportService
@@ -52,6 +53,10 @@ class DemoProfileService:
             repository.save(budget)
         repository.save_accounts(accounts)
         repository.save_debts(debts)
+        CategoryService(
+            data_dir=profile.data_dir,
+            repository=repository,
+        ).sincronizar_desde_datos()
         self._crear_conciliaciones_demo(
             profile,
             self.DEMO_YEAR,

@@ -103,9 +103,11 @@ class MovementDialog(QDialog):
     def _load_categories(self) -> None:
         """Carga categorias segun el tipo seleccionado."""
         current = self.category_input.currentText()
+        historical = self.movement.categoria if self.movement else None
         self.category_input.clear()
         for category in self.service.obtener_categorias(
             self.type_input.currentData(),
+            incluir_categoria=historical,
         ):
             self.category_input.addItem(category)
         if current:

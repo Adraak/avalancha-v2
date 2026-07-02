@@ -809,36 +809,62 @@ categorias desde Avalancha V2. Por eso el orden inmediato queda:
 
 ### Etapa 14.2 - Gestion de Categorias
 
-Esta etapa debera permitir crear, editar y desactivar categorias. No debe
-eliminar fisicamente categorias con movimientos asociados, porque eso romperia
-historial financiero, reportes, presupuestos y analisis posteriores.
+Estado: implementada para revision, sin commit de cierre.
 
-Alcance futuro propuesto:
+La etapa agrega administracion formal de categorias por perfil. La decision
+tecnica fue mantener compatibilidad por nombre: movimientos y presupuestos
+siguen guardando `categoria` como texto visible, mientras `CategoryService`
+mantiene un catalogo formal en `categorias.json` dentro del `data_dir` del
+perfil activo.
 
-- crear categorias;
-- editar categorias;
-- desactivar categorias;
-- proteger categorias con movimientos asociados contra borrado destructivo;
-- definir tipo: ingreso, gasto o ambos si se decide permitirlo;
-- definir clase: fija o variable;
-- usar categorias en movimientos, presupuestos, reportes, Resumen Visual y
-  alertas.
-
-Modelo conceptual sugerido, aun no implementado:
+Modelo implementado:
 
 - `id`
 - `nombre`
-- `tipo`
-- `clase`
+- `tipo`: `ingreso`, `gasto`, `ambos`
+- `clase`: `fija`, `variable`
 - `activa`
 - `color_key`
 - `created_at`
 - `updated_at`
 
-La separacion fijo/variable creada en la Etapa 14.1 dentro de
-`DashboardVisualService` queda documentada como solucion transitoria. Debe ser
-reemplazada o complementada por categorias administrables por el usuario en la
-Etapa 14.2.
+Archivos principales:
+
+- `core/models/categoria.py`
+- `services/category_service.py`
+- `ui_pyside6/pages/categories_page.py`
+- `ui_pyside6/pages/category_dialog.py`
+- `tests/test_v2_category_service.py`
+
+Integraciones:
+
+- `MovementService` valida categorias contra `CategoryService` y solo ofrece
+  categorias activas compatibles con el tipo de movimiento. Al editar un
+  movimiento antiguo permite conservar una categoria inactiva existente.
+- `BudgetService` usa categorias activas de gasto o ambos y rechaza categorias
+  solo ingreso. Al persistir presupuestos mantiene `is_fixed` sincronizado con
+  la clase formal para compatibilidad con el motor heredado.
+- `DashboardVisualService` aplica la clase formal antes del fallback por
+  `is_fixed`, recurrentes o nombres normalizados.
+- `FinancialAlertService` ignora categorias fijas formales al evaluar alertas
+  de presupuesto variable.
+- `DemoProfileService` sincroniza categorias demo ficticias despues de generar
+  presupuestos, cuentas y deudas.
+- `MainWindow` agrega la pagina `Categorias` al menu lateral.
+
+Regla de historial:
+
+- No se implementa borrado fisico destructivo en UI. La accion de eliminar
+  desactiva la categoria, especialmente si tiene movimientos, presupuestos o
+  recurrentes asociados.
+
+Compatibilidad:
+
+- Si no existe `categorias.json`, `CategoryService` crea categorias base y
+  sincroniza nombres encontrados en presupuestos, movimientos y recurrentes
+  existentes.
+- Si una categoria formal no existe, Resumen Visual mantiene el fallback de la
+  Etapa 14.1 para no romper datos antiguos.
 
 ## Roadmap futuro - Analisis temporal de deudas
 

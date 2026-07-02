@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
 
 from services.account_service import AccountService
 from services.budget_service import BudgetService
+from services.category_service import CategoryService
 from services.demo_profile_service import DemoProfileService
 from services.debt_service import DebtService
 from services.movement_service import MovementService
@@ -28,6 +29,7 @@ from services.report_service import ReportService
 from services.settings_service import SettingsService
 from ui_pyside6.pages.accounts_page import AccountsPage
 from ui_pyside6.pages.budgets_page import BudgetsPage
+from ui_pyside6.pages.categories_page import CategoriesPage
 from ui_pyside6.pages.dashboard_page import DashboardPage
 from ui_pyside6.pages.debts_page import DebtsPage
 from ui_pyside6.pages.movements_page import MovementsPage
@@ -233,15 +235,18 @@ class MainWindow(QMainWindow):
         profile = self.profile_service.obtener_activo()
         data_dir = profile.data_dir
         year, month = self.profile_service.obtener_periodo_trabajo(profile.id)
+        category_service = CategoryService(data_dir=data_dir)
         movement_service = MovementService(
             data_dir=data_dir,
             year=year,
             month=month,
+            category_service=category_service,
         )
         budget_service = BudgetService(
             data_dir=data_dir,
             year=year,
             month=month,
+            category_service=category_service,
         )
         account_service = AccountService(data_dir=data_dir)
         debt_service = DebtService(data_dir=data_dir)
@@ -272,8 +277,9 @@ class MainWindow(QMainWindow):
                 DashboardPage(data_dir=data_dir, year=year, month=month),
             ),
             NavigationItem("Movimientos", MovementsPage(movement_service)),
-            NavigationItem("Presupuestos", BudgetsPage(budget_service)),
             NavigationItem("Cuentas", AccountsPage(account_service)),
+            NavigationItem("Presupuestos", BudgetsPage(budget_service)),
+            NavigationItem("Categorías", CategoriesPage(category_service)),
             NavigationItem("Deudas", DebtsPage(debt_service)),
             NavigationItem("Reportes", ReportsPage(report_service)),
             NavigationItem(
@@ -292,7 +298,7 @@ class MainWindow(QMainWindow):
         button = self.navigation_buttons[index]
         button.setChecked(True)
         section = button.text()
-        self.active_section_label.setText(f"Seccion activa: {section}")
+        self.active_section_label.setText(f"Sección activa: {section}")
 
     def _reload_profile(self) -> None:
         """Reconstruye las paginas al cambiar el perfil activo."""

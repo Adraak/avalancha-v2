@@ -75,8 +75,9 @@ class BudgetDialog(QDialog):
             QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow,
         )
 
-        self.category_input.setEditable(True)
-        for category in self.service.categorias_disponibles():
+        self.category_input.setEditable(False)
+        current_category = self.presupuesto.categoria if self.presupuesto else None
+        for category in self.service.categorias_disponibles(current_category):
             self.category_input.addItem(category)
 
         self.currency_input.addItems(["CLP", "USD", "EUR"])

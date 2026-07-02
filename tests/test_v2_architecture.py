@@ -23,6 +23,7 @@ class V2ArchitectureTest(unittest.TestCase):
             from pathlib import Path
 
             from core.models.cuenta import Cuenta
+            from core.models.categoria import Categoria
             from core.models.conciliacion import Conciliacion
             from core.models.configuracion import ConfiguracionAplicacion
             from core.models.deuda import Deuda
@@ -32,6 +33,7 @@ class V2ArchitectureTest(unittest.TestCase):
             from core.models.resumen_mensual import ResumenMensual
             from services.account_service import AccountService
             from services.budget_service import BudgetService
+            from services.category_service import CategoryService
             from services.dashboard_visual_service import DashboardVisualService
             from services.demo_profile_service import DemoProfileService
             from services.debt_service import DebtService
@@ -54,6 +56,12 @@ class V2ArchitectureTest(unittest.TestCase):
                 medio_pago="Debito",
             )
             Cuenta(id="cuenta-1", nombre="Cuenta prueba", tipo="debito")
+            Categoria(
+                id="cat-prueba",
+                nombre="Categoria prueba",
+                tipo="gasto",
+                clase="variable",
+            )
             Conciliacion(
                 id="conciliacion-1",
                 cuenta_id="cuenta-1",
@@ -84,6 +92,7 @@ class V2ArchitectureTest(unittest.TestCase):
             root = Path(temp_dir.name)
             AccountService()
             BudgetService()
+            CategoryService(data_dir=root / "data")
             DashboardVisualService(data_dir=root / "data")
             FinancialAlertService()
             FinancialSummaryService()
@@ -154,6 +163,38 @@ class V2ArchitectureTest(unittest.TestCase):
         ).read_text(encoding="utf-8")
 
         self.assertIn("ui_pyside6.color_system", dashboard)
+
+    def test_categories_ui_no_importa_storage_directo(self) -> None:
+        """Evita que Categorias acceda directo a almacenamiento."""
+        project_root = Path(__file__).resolve().parents[1]
+        categories_page = (
+            project_root / "ui_pyside6" / "pages" / "categories_page.py"
+        ).read_text(encoding="utf-8")
+
+        self.assertNotIn("BudgetRepository", categories_page)
+        self.assertNotIn("avalancha.storage", categories_page)
+        self.assertNotIn("json.", categories_page)
+
+    def test_categories_ui_textos_finales(self) -> None:
+        """Verifica textos visibles de Categorias en espanol."""
+        project_root = Path(__file__).resolve().parents[1]
+        main_window = (
+            project_root / "ui_pyside6" / "main_window.py"
+        ).read_text(encoding="utf-8")
+        categories_page = (
+            project_root / "ui_pyside6" / "pages" / "categories_page.py"
+        ).read_text(encoding="utf-8")
+        category_dialog = (
+            project_root / "ui_pyside6" / "pages" / "category_dialog.py"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn('"Categorías"', main_window)
+        self.assertIn("Sección activa", main_window)
+        self.assertIn('"Categorías"', categories_page)
+        self.assertIn('"Automático"', categories_page)
+        self.assertIn('"Guardar"', category_dialog)
+        self.assertIn('"Cancelar"', category_dialog)
+        self.assertNotIn('form.addRow("Color"', category_dialog)
 
     def test_dashboard_alertas_usan_texto_limpio(self) -> None:
         """Evita marcadores visuales problemáticos en alertas."""

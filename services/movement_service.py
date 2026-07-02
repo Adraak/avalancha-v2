@@ -11,6 +11,7 @@ from avalancha.models import Transaction
 from avalancha.storage import BudgetRepository
 
 from core.models.movimiento import Movimiento
+from services.category_service import CategoryService
 
 
 @dataclass(frozen=True, slots=True)
@@ -30,12 +31,17 @@ class MovementService:
         year: int | None = None,
         month: int | None = None,
         repository: BudgetRepository | None = None,
+        category_service: CategoryService | None = None,
     ) -> None:
         """Inicializa el servicio para un mes de trabajo."""
         today = date.today()
         self.year = year or today.year
         self.month = month or today.month
         self.repository = repository or BudgetRepository(data_dir)
+        self.category_service = category_service or CategoryService(
+            data_dir=self.repository.data_dir,
+            repository=self.repository,
+        )
 
     def obtener_movimientos(self) -> list[Movimiento]:
         """Devuelve los movimientos del mes ordenados del mas reciente."""
@@ -110,7 +116,10 @@ class MovementService:
             imprevisto=es_imprevisto,
             clase=self._clase_por_flags(es_imprevisto, original.recurring_id),
         )
-        self._validar_movimiento(movimiento)
+        self._validar_movimiento(
+            movimiento,
+            categoria_original=original.category,
+        )
         budget = self.repository.load(self.year, self.month)
         budget.add_or_update_transaction(self._a_transaccion(movimiento))
         self.repository.save(budget)
@@ -145,20 +154,25 @@ class MovementService:
                 encontrados.append(movimiento)
         return encontrados
 
-    def obtener_categorias(self, tipo: str | None = None) -> list[str]:
+    def obtener_categorias(
+        self,
+        tipo: str | None = None,
+        incluir_inactivas: bool = False,
+        incluir_categoria: str | None = None,
+    ) -> list[str]:
         """Devuelve categorias disponibles, filtradas por tipo si aplica."""
-        budget = self.repository.load(self.year, self.month)
-        tipo_normalizado = tipo.strip().lower() if tipo else None
-        categorias = [
-            item.name
-            for item in budget.categories
-            if getattr(item, "active", True)
-            and (
-                tipo_normalizado is None
-                or item.transaction_type == tipo_normalizado
+        if tipo:
+            return self.category_service.nombres_por_tipo(
+                tipo,
+                incluir_inactivas=incluir_inactivas,
+                incluir_nombre=incluir_categoria,
             )
-        ]
-        return sorted(set(categorias), key=str.casefold)
+        categorias = (
+            self.category_service.listar_categorias()
+            if incluir_inactivas
+            else self.category_service.listar_activas()
+        )
+        return [item.nombre for item in categorias]
 
     def obtener_cuentas(self) -> list[OpcionCuenta]:
         """Devuelve cuentas activas disponibles para movimientos."""
@@ -173,12 +187,22 @@ class MovementService:
         """Devuelve el nombre de una cuenta por identificador."""
         return self._mapa_cuentas().get(cuenta_id, "Sin cuenta")
 
-    def _validar_movimiento(self, movimiento: Movimiento) -> None:
+    def _validar_movimiento(
+        self,
+        movimiento: Movimiento,
+        categoria_original: str | None = None,
+    ) -> None:
         """Valida reglas de negocio antes de guardar."""
-        categorias = self.obtener_categorias(movimiento.tipo)
         cuentas = {item.id for item in self.obtener_cuentas()}
-        if movimiento.categoria not in categorias:
-            raise ValueError("La categoria seleccionada no existe.")
+        permitir_inactiva = (
+            categoria_original is not None
+            and movimiento.categoria.casefold() == categoria_original.casefold()
+        )
+        self.category_service.validar_categoria_movimiento(
+            movimiento.categoria,
+            movimiento.tipo,
+            permitir_inactiva=permitir_inactiva,
+        )
         if movimiento.cuenta_id not in cuentas:
             raise ValueError("La cuenta seleccionada no existe.")
         if movimiento.monto <= 0:
