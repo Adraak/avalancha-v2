@@ -703,6 +703,32 @@ Reglas implementadas:
 - sincronizar categorias base y categorias heredadas si falta catalogo formal;
 - mantener Personal y Demo aislados mediante `data_dir` independiente.
 
+## Etapa 14.3 - Transferencias internas
+
+Estado: implementada para revision, sin commit de cierre.
+
+| Archivo | Proposito | Contiene logica financiera | Contiene UI | Destino | Prioridad | Observaciones |
+| --- | --- | --- | --- | --- | --- | --- |
+| `avalancha/models.py` | Modelo persistible heredado | Si | No | `legacy/core` | Alta | `Transaction` acepta `transferencia` y `destination_account_id`. |
+| `core/models/movimiento.py` | Contrato V2 puro | Si | No | `core/` | Alta | `Movimiento` distingue ingreso, gasto y transferencia. |
+| `services/movement_service.py` | CRUD de movimientos | Si | No | `services/` | Alta | Crea y valida transferencias con origen/destino. |
+| `services/reconciliation_service.py` | Conciliacion por cuenta | Si | No | `services/` | Alta | Origen resta y destino suma en saldo registrado. |
+| `services/account_service.py` | Administracion de cuentas | Si | No | `services/` | Media | Protege cuentas usadas como destino historico. |
+| `services/report_service.py` | Reporte mensual | Si | No | `services/` | Media | Agrega seccion separada de transferencias internas. |
+| `ui_pyside6/pages/movement_dialog.py` | Formulario de movimientos | No | Si | `ui_pyside6/` | Alta | Muestra origen/destino y oculta categoria para transferencias. |
+| `ui_pyside6/pages/movement_page.py` | Tabla de movimientos | No | Si | `ui_pyside6/` | Alta | Presenta `origen → destino` y filtra por cuenta origen/destino. |
+| `ui_pyside6/pages/accounts_page.py` | Tabla de cuentas | No | Si | `ui_pyside6/` | Media | Agrega `Ver movimientos` para solicitar historial por cuenta. |
+| `ui_pyside6/main_window.py` | Navegacion principal | No | Si | `ui_pyside6/` | Media | Conecta Cuentas con Movimientos filtrado por cuenta. |
+| `tests/test_v2_internal_transfers.py` | Cobertura de etapa 14.3 | No | No | `tests/` | Alta | Verifica totales, saldos, reportes y arquitectura. |
+
+Decision tecnica:
+
+- Se eligio movimiento unico de transferencia para evitar registros partidos.
+- `cuenta_id` queda como cuenta origen para no romper datos antiguos.
+- `cuenta_destino_id` queda como campo opcional nuevo.
+- Las transferencias aparecen en el historial de ambas cuentas.
+- No se implementa pago de deuda ni tarjeta en esta etapa.
+
 ## Roadmap futuro - Analisis temporal de deudas
 
 ### Diagnostico arquitectonico

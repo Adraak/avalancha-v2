@@ -266,6 +266,11 @@ class MainWindow(QMainWindow):
             reports_dir=settings.carpeta_reportes,
             key_path=profile.key_path,
         )
+        movements_page = MovementsPage(movement_service)
+        accounts_page = AccountsPage(account_service)
+        accounts_page.movements_requested.connect(
+            self._open_account_movements,
+        )
         profiles_page = ProfilesPage(
             self.profile_service,
             self.demo_service,
@@ -276,8 +281,8 @@ class MainWindow(QMainWindow):
                 "Resumen",
                 DashboardPage(data_dir=data_dir, year=year, month=month),
             ),
-            NavigationItem("Movimientos", MovementsPage(movement_service)),
-            NavigationItem("Cuentas", AccountsPage(account_service)),
+            NavigationItem("Movimientos", movements_page),
+            NavigationItem("Cuentas", accounts_page),
             NavigationItem("Presupuestos", BudgetsPage(budget_service)),
             NavigationItem("Categorías", CategoriesPage(category_service)),
             NavigationItem("Deudas", DebtsPage(debt_service)),
@@ -299,6 +304,19 @@ class MainWindow(QMainWindow):
         button.setChecked(True)
         section = button.text()
         self.active_section_label.setText(f"Sección activa: {section}")
+
+    def _open_account_movements(
+        self,
+        cuenta_id: str,
+        cuenta_nombre: str,
+    ) -> None:
+        """Abre Movimientos filtrando por la cuenta solicitada."""
+        for index in range(self.stack.count()):
+            widget = self.stack.widget(index)
+            if isinstance(widget, MovementsPage):
+                widget.filtrar_por_cuenta(cuenta_id, cuenta_nombre)
+                self._select_section(index)
+                return
 
     def _reload_profile(self) -> None:
         """Reconstruye las paginas al cambiar el perfil activo."""

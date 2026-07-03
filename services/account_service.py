@@ -212,6 +212,8 @@ class AccountService:
             for movement in budget.transactions + budget.recurring_items:
                 if movement.account_id == cuenta_id:
                     return True
+                if getattr(movement, "destination_account_id", None) == cuenta_id:
+                    return True
         return False
 
     @staticmethod

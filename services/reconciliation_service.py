@@ -141,6 +141,15 @@ class ReconciliationService:
         account_type = self._account_type(cuenta)
         saldo = getattr(cuenta, "initial_balance", 0)
         for movimiento in movimientos:
+            if self._is_transfer(movimiento):
+                if self._movement_account_id(movimiento) == account_id:
+                    saldo -= self._amount(movimiento)
+                if (
+                    self._movement_destination_account_id(movimiento)
+                    == account_id
+                ):
+                    saldo += self._amount(movimiento)
+                continue
             if self._movement_account_id(movimiento) != account_id:
                 continue
             if account_type == "tarjeta_credito":
@@ -352,6 +361,17 @@ class ReconciliationService:
         )
 
     @staticmethod
+    def _movement_destination_account_id(
+        movimiento: Movimiento | Any,
+    ) -> str | None:
+        """Obtiene la cuenta destino de una transferencia."""
+        return getattr(
+            movimiento,
+            "destination_account_id",
+            getattr(movimiento, "cuenta_destino_id", None),
+        )
+
+    @staticmethod
     def _transaction_type(movimiento: Movimiento | Any) -> str:
         """Obtiene el tipo de movimiento."""
         return getattr(
@@ -369,6 +389,11 @@ class ReconciliationService:
     def _is_expense(cls, movimiento: Movimiento | Any) -> bool:
         """Indica si el movimiento es gasto."""
         return cls._transaction_type(movimiento) == "gasto"
+
+    @classmethod
+    def _is_transfer(cls, movimiento: Movimiento | Any) -> bool:
+        """Indica si el movimiento es transferencia interna."""
+        return cls._transaction_type(movimiento) == "transferencia"
 
     @staticmethod
     def _amount(movimiento: Movimiento | Any) -> int:

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QHeaderView,
@@ -37,6 +37,8 @@ class SortableItem(QTableWidgetItem):
 
 class AccountsPage(QWidget):
     """CRUD de cuentas del perfil activo usando AccountService."""
+
+    movements_requested = Signal(str, str)
 
     HEADERS = [
         "Cuenta",
@@ -116,6 +118,14 @@ class AccountsPage(QWidget):
         """Desactiva la cuenta seleccionada."""
         self._change_selected_state(False)
 
+    def view_selected_movements(self) -> None:
+        """Solicita abrir movimientos asociados a la cuenta seleccionada."""
+        account = self._selected_account()
+        if account is None:
+            self._show_info("Selecciona una cuenta para ver sus movimientos.")
+            return
+        self.movements_requested.emit(account.account_id, account.name)
+
     def _build_ui(self) -> None:
         """Construye titulo, tabla y acciones."""
         layout = QVBoxLayout(self)
@@ -146,6 +156,7 @@ class AccountsPage(QWidget):
         delete_button = QPushButton("Eliminar")
         activate_button = QPushButton("Activar")
         deactivate_button = QPushButton("Desactivar")
+        movements_button = QPushButton("Ver movimientos")
         refresh_button = QPushButton("Actualizar")
 
         new_button.clicked.connect(self.new_account)
@@ -153,6 +164,7 @@ class AccountsPage(QWidget):
         delete_button.clicked.connect(self.delete_selected)
         activate_button.clicked.connect(self.activate_selected)
         deactivate_button.clicked.connect(self.deactivate_selected)
+        movements_button.clicked.connect(self.view_selected_movements)
         refresh_button.clicked.connect(self.refresh)
 
         buttons.addStretch(1)
@@ -161,6 +173,7 @@ class AccountsPage(QWidget):
         buttons.addWidget(delete_button)
         buttons.addWidget(activate_button)
         buttons.addWidget(deactivate_button)
+        buttons.addWidget(movements_button)
         buttons.addWidget(refresh_button)
 
         layout.addWidget(title)

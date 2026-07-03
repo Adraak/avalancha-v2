@@ -140,6 +140,7 @@ class ReportService:
         estructura = self._crear_estructura(
             budget=budget,
             movimientos=movimientos,
+            cuentas=accounts,
             indicadores=indicators,
             conciliacion=reconciliacion,
             ejecucion=ejecucion,
@@ -221,6 +222,7 @@ class ReportService:
         self,
         budget: MonthlyBudget,
         movimientos: list[Any],
+        cuentas: list[Any],
         indicadores: Any,
         conciliacion: dict[str, object],
         ejecucion: list[dict[str, object]],
@@ -366,6 +368,10 @@ class ReportService:
                 ],
             ),
             SeccionReporte(
+                "TRANSFERENCIAS INTERNAS",
+                self._lineas_transferencias(movimientos, cuentas),
+            ),
+            SeccionReporte(
                 "DIAGNOSTICO FINANCIERO",
                 diagnostico,
             ),
@@ -506,6 +512,38 @@ class ReportService:
             )
             for movimiento in imprevistos
         ]
+
+    @staticmethod
+    def _lineas_transferencias(
+        movimientos: list[Any],
+        cuentas: list[Any],
+    ) -> list[str]:
+        """Renderiza transferencias internas en seccion separada."""
+        transferencias = [
+            movimiento
+            for movimiento in movimientos
+            if getattr(movimiento, "tipo", "") == "transferencia"
+        ]
+        if not transferencias:
+            return ["Sin transferencias internas."]
+        nombres = {
+            getattr(cuenta, "account_id", ""): getattr(cuenta, "name", "")
+            for cuenta in cuentas
+        }
+        lineas = []
+        for movimiento in transferencias:
+            origen = nombres.get(movimiento.cuenta_id, "Sin cuenta")
+            destino = nombres.get(
+                movimiento.cuenta_destino_id,
+                "Sin cuenta destino",
+            )
+            lineas.append(
+                f"- {movimiento.fecha.strftime('%d-%m-%Y')} | "
+                f"{origen} → {destino} | "
+                f"{ReportService._format_clp(int(movimiento.monto))} | "
+                f"{movimiento.descripcion or 'Sin descripcion'}",
+            )
+        return lineas
 
     @staticmethod
     def _lineas_o_sin_datos(valores: list[str]) -> list[str]:

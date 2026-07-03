@@ -59,13 +59,23 @@ class MovementService:
         self,
         fecha: date | str,
         tipo: str,
-        categoria: str,
-        cuenta_id: str,
-        monto: int | str,
+        categoria: str = "",
+        cuenta_id: str = "",
+        monto: int | str = 0,
         descripcion: str = "",
         imprevisto: bool = False,
+        cuenta_destino_id: str | None = None,
     ) -> Movimiento:
         """Crea y persiste un movimiento nuevo."""
+        if str(tipo).strip().lower() == "transferencia":
+            return self.crear_transferencia(
+                fecha=fecha,
+                cuenta_origen_id=cuenta_id,
+                cuenta_destino_id=cuenta_destino_id,
+                monto=monto,
+                descripcion=descripcion,
+                imprevisto=imprevisto,
+            )
         movimiento = Movimiento(
             id=uuid4().hex,
             fecha=self._normalizar_fecha(fecha),
@@ -84,21 +94,74 @@ class MovementService:
         self.repository.save(budget)
         return movimiento
 
+    def crear_transferencia(
+        self,
+        fecha: date | str,
+        cuenta_origen_id: str,
+        cuenta_destino_id: str | None,
+        monto: int | str,
+        descripcion: str = "",
+        imprevisto: bool = False,
+    ) -> Movimiento:
+        """Crea una transferencia interna entre cuentas propias."""
+        if imprevisto:
+            raise ValueError("La transferencia no puede ser imprevisto.")
+        movimiento = Movimiento(
+            id=uuid4().hex,
+            fecha=self._normalizar_fecha(fecha),
+            tipo="transferencia",
+            categoria="",
+            descripcion=descripcion,
+            monto=self._normalizar_monto(monto),
+            cuenta_id=cuenta_origen_id,
+            cuenta_destino_id=cuenta_destino_id,
+            medio_pago="Transferencia interna",
+            imprevisto=False,
+            clase="Transferencia",
+        )
+        self._validar_movimiento(movimiento)
+        budget = self.repository.load(self.year, self.month)
+        budget.add_or_update_transaction(self._a_transaccion(movimiento))
+        self.repository.save(budget)
+        return movimiento
+
     def editar_movimiento(
         self,
         movimiento_id: str,
         fecha: date | str,
         tipo: str,
-        categoria: str,
-        cuenta_id: str,
-        monto: int | str,
+        categoria: str = "",
+        cuenta_id: str = "",
+        monto: int | str = 0,
         descripcion: str = "",
         imprevisto: bool | None = None,
+        cuenta_destino_id: str | None = None,
     ) -> Movimiento:
         """Actualiza un movimiento existente."""
         original = self._obtener_transaccion(movimiento_id)
         if original is None:
             raise ValueError("El movimiento no existe.")
+        if str(tipo).strip().lower() == "transferencia":
+            if imprevisto:
+                raise ValueError("La transferencia no puede ser imprevisto.")
+            movimiento = Movimiento(
+                id=movimiento_id,
+                fecha=self._normalizar_fecha(fecha),
+                tipo="transferencia",
+                categoria="",
+                descripcion=descripcion,
+                monto=self._normalizar_monto(monto),
+                cuenta_id=cuenta_id,
+                cuenta_destino_id=cuenta_destino_id,
+                medio_pago="Transferencia interna",
+                imprevisto=False,
+                clase="Transferencia",
+            )
+            self._validar_movimiento(movimiento)
+            budget = self.repository.load(self.year, self.month)
+            budget.add_or_update_transaction(self._a_transaccion(movimiento))
+            self.repository.save(budget)
+            return movimiento
         es_imprevisto = (
             original.is_unexpected if imprevisto is None else bool(imprevisto)
         )
@@ -139,6 +202,9 @@ class MovementService:
         cuentas = self._mapa_cuentas()
         encontrados = []
         for movimiento in self.obtener_movimientos():
+            destino = ""
+            if movimiento.cuenta_destino_id:
+                destino = cuentas.get(movimiento.cuenta_destino_id, "")
             contenido = " ".join(
                 [
                     movimiento.fecha.strftime("%d-%m-%Y"),
@@ -147,12 +213,33 @@ class MovementService:
                     movimiento.descripcion,
                     str(movimiento.monto),
                     cuentas.get(movimiento.cuenta_id, ""),
+                    destino,
                     movimiento.clase,
                 ]
             ).casefold()
             if filtro in contenido:
                 encontrados.append(movimiento)
         return encontrados
+
+    def obtener_movimientos_por_cuenta(
+        self,
+        cuenta_id: str,
+    ) -> list[Movimiento]:
+        """Devuelve movimientos asociados a una cuenta origen o destino."""
+        cuenta_id = str(cuenta_id).strip()
+        if not cuenta_id:
+            raise ValueError("Debe seleccionar una cuenta.")
+        cuentas = {item.id for item in self.obtener_cuentas()}
+        if cuenta_id not in cuentas:
+            raise ValueError("La cuenta seleccionada no existe.")
+        return [
+            movimiento
+            for movimiento in self.obtener_movimientos()
+            if (
+                movimiento.cuenta_id == cuenta_id
+                or movimiento.cuenta_destino_id == cuenta_id
+            )
+        ]
 
     def obtener_categorias(
         self,
@@ -194,6 +281,20 @@ class MovementService:
     ) -> None:
         """Valida reglas de negocio antes de guardar."""
         cuentas = {item.id for item in self.obtener_cuentas()}
+        if movimiento.monto <= 0:
+            raise ValueError("El monto debe ser mayor que cero.")
+        if movimiento.tipo == "transferencia":
+            if movimiento.cuenta_id not in cuentas:
+                raise ValueError("La cuenta origen seleccionada no existe.")
+            if movimiento.cuenta_destino_id not in cuentas:
+                raise ValueError("La cuenta destino seleccionada no existe.")
+            if movimiento.cuenta_id == movimiento.cuenta_destino_id:
+                raise ValueError(
+                    "La cuenta origen y destino deben ser distintas."
+                )
+            if movimiento.imprevisto:
+                raise ValueError("La transferencia no puede ser imprevisto.")
+            return
         permitir_inactiva = (
             categoria_original is not None
             and movimiento.categoria.casefold() == categoria_original.casefold()
@@ -205,8 +306,6 @@ class MovementService:
         )
         if movimiento.cuenta_id not in cuentas:
             raise ValueError("La cuenta seleccionada no existe.")
-        if movimiento.monto <= 0:
-            raise ValueError("El monto debe ser mayor que cero.")
 
     def _existe_movimiento(self, movimiento_id: str) -> bool:
         """Indica si existe un movimiento en el mes activo."""
@@ -233,6 +332,11 @@ class MovementService:
             descripcion=transaction.description,
             monto=transaction.amount,
             cuenta_id=transaction.account_id or "sin-cuenta",
+            cuenta_destino_id=getattr(
+                transaction,
+                "destination_account_id",
+                None,
+            ),
             medio_pago=transaction.payment_method,
             recurrente_id=transaction.recurring_id,
             deuda_id=transaction.debt_id,
@@ -254,6 +358,7 @@ class MovementService:
             is_unexpected=movimiento.imprevisto,
             debt_id=movimiento.deuda_id,
             account_id=movimiento.cuenta_id,
+            destination_account_id=movimiento.cuenta_destino_id,
         )
 
     def _mapa_cuentas(self) -> dict[str, str]:
@@ -282,6 +387,8 @@ class MovementService:
     @staticmethod
     def _clase_movimiento(transaction: Transaction) -> str:
         """Clasifica visualmente una transaccion heredada."""
+        if transaction.transaction_type == "transferencia":
+            return "Transferencia"
         return MovementService._clase_por_flags(
             transaction.is_unexpected,
             transaction.recurring_id,

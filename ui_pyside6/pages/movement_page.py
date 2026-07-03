@@ -54,15 +54,45 @@ class MovementsPage(QWidget):
         super().__init__()
         self.service = service or MovementService()
         self.search_input = QLineEdit()
+        self.filter_label = QLabel("")
+        self.clear_filter_button = QPushButton("Todos")
         self.table = QTableWidget()
         self._movements_by_id: dict[str, Movimiento] = {}
+        self._account_filter_id: str | None = None
+        self._account_filter_name: str = ""
         self._build_ui()
         self.refresh()
 
     def refresh(self) -> None:
         """Actualiza la tabla usando el filtro vigente."""
-        movements = self.service.buscar_movimientos(self.search_input.text())
+        if self._account_filter_id:
+            movements = self.service.obtener_movimientos_por_cuenta(
+                self._account_filter_id,
+            )
+            search_text = self.search_input.text().strip().casefold()
+            if search_text:
+                movements = self._filtrar_lista(movements, search_text)
+        else:
+            movements = self.service.buscar_movimientos(self.search_input.text())
         self._populate_table(movements)
+
+    def filtrar_por_cuenta(self, cuenta_id: str, nombre: str = "") -> None:
+        """Aplica filtro de movimientos asociados a una cuenta."""
+        self._account_filter_id = cuenta_id
+        self._account_filter_name = nombre or self.service.nombre_cuenta(
+            cuenta_id,
+        )
+        self.filter_label.setText(f"Cuenta: {self._account_filter_name}")
+        self.clear_filter_button.setVisible(True)
+        self.refresh()
+
+    def limpiar_filtro(self) -> None:
+        """Limpia el filtro por cuenta y muestra todos los movimientos."""
+        self._account_filter_id = None
+        self._account_filter_name = ""
+        self.filter_label.setText("")
+        self.clear_filter_button.setVisible(False)
+        self.refresh()
 
     def new_movement(self) -> None:
         """Abre el dialogo para crear un movimiento."""
@@ -132,6 +162,10 @@ class MovementsPage(QWidget):
         new_top_button.clicked.connect(self.new_movement)
 
         top_bar.addWidget(self.search_input, stretch=1)
+        top_bar.addWidget(self.filter_label)
+        self.clear_filter_button.clicked.connect(self.limpiar_filtro)
+        self.clear_filter_button.setVisible(False)
+        top_bar.addWidget(self.clear_filter_button)
         top_bar.addWidget(new_top_button)
 
         self.table.setColumnCount(len(self.HEADERS))
@@ -148,9 +182,10 @@ class MovementsPage(QWidget):
         self.table.setSortingEnabled(True)
         self.table.doubleClicked.connect(self.edit_selected)
         self.table.horizontalHeader().setSectionResizeMode(
-            QHeaderView.ResizeMode.Stretch,
+            QHeaderView.ResizeMode.Interactive,
         )
         self.table.horizontalHeader().setSectionsClickable(True)
+        self._configure_table_columns()
 
         bottom_bar = QHBoxLayout()
         new_button = QPushButton("Nuevo")
@@ -174,6 +209,20 @@ class MovementsPage(QWidget):
         layout.addWidget(self.table, stretch=1)
         layout.addLayout(bottom_bar)
 
+    def _configure_table_columns(self) -> None:
+        """Ajusta anchos para leer transferencias origen-destino."""
+        widths = {
+            0: 110,
+            1: 170,
+            2: 520,
+            3: 120,
+            4: 260,
+            5: 130,
+            6: 130,
+        }
+        for column, width in widths.items():
+            self.table.setColumnWidth(column, width)
+
     def _populate_table(self, movements: list[Movimiento]) -> None:
         """Carga movimientos en la tabla."""
         self.table.setSortingEnabled(False)
@@ -182,15 +231,18 @@ class MovementsPage(QWidget):
 
         for row, movement in enumerate(movements):
             self.table.insertRow(row)
-            account_name = self.service.nombre_cuenta(movement.cuenta_id)
+            account_name = self._account_display(movement)
             values = [
                 (
                     movement.fecha.strftime("%d-%m-%Y"),
                     movement.fecha.isoformat(),
                 ),
-                (movement.categoria, movement.categoria.casefold()),
+                (
+                    self._category_display(movement),
+                    self._category_display(movement).casefold(),
+                ),
                 (account_name, account_name.casefold()),
-                (movement.tipo.capitalize(), movement.tipo),
+                (self._type_display(movement), movement.tipo),
                 (movement.descripcion, movement.descripcion.casefold()),
                 (movement.clase, movement.clase.casefold()),
                 (self._format_clp(movement.monto), movement.monto),
@@ -224,6 +276,30 @@ class MovementsPage(QWidget):
         """Formatea un monto como CLP."""
         return f"$ {amount:,.0f}".replace(",", ".")
 
+    def _account_display(self, movement: Movimiento) -> str:
+        """Devuelve cuenta visible, con origen y destino si aplica."""
+        origin = self.service.nombre_cuenta(movement.cuenta_id)
+        if not movement.es_transferencia:
+            return origin
+        destination = self.service.nombre_cuenta(
+            movement.cuenta_destino_id or "",
+        )
+        return f"{origin} → {destination}"
+
+    @staticmethod
+    def _category_display(movement: Movimiento) -> str:
+        """Devuelve categoria visible para la tabla."""
+        if movement.es_transferencia:
+            return "Transferencia interna"
+        return movement.categoria
+
+    @staticmethod
+    def _type_display(movement: Movimiento) -> str:
+        """Devuelve tipo visible en espanol."""
+        if movement.es_transferencia:
+            return "Transferencia"
+        return movement.tipo.capitalize()
+
     def _show_error(self, message: str) -> None:
         """Muestra un error de validacion o persistencia."""
         QMessageBox.critical(self, "No se pudo guardar", message)
@@ -231,3 +307,26 @@ class MovementsPage(QWidget):
     def _show_info(self, message: str) -> None:
         """Muestra un mensaje informativo."""
         QMessageBox.information(self, "Movimientos", message)
+
+    def _filtrar_lista(
+        self,
+        movements: list[Movimiento],
+        search_text: str,
+    ) -> list[Movimiento]:
+        """Filtra una lista ya restringida por cuenta usando texto libre."""
+        encontrados = []
+        for movement in movements:
+            contenido = " ".join(
+                [
+                    movement.fecha.strftime("%d-%m-%Y"),
+                    movement.tipo,
+                    movement.categoria,
+                    movement.descripcion,
+                    str(movement.monto),
+                    self._account_display(movement),
+                    movement.clase,
+                ],
+            ).casefold()
+            if search_text in contenido:
+                encontrados.append(movement)
+        return encontrados

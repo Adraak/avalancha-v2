@@ -11,7 +11,8 @@ from uuid import uuid4
 
 EXPENSE = "gasto"
 INCOME = "ingreso"
-TRANSACTION_TYPES = {EXPENSE, INCOME}
+TRANSFER = "transferencia"
+TRANSACTION_TYPES = {EXPENSE, INCOME, TRANSFER}
 DEBT_CATEGORIES = {
     "tarjeta_credito",
     "credito_consumo",
@@ -100,7 +101,7 @@ class CategoryBudget:
 
         if not self.name:
             raise ValueError("La categoria necesita un nombre.")
-        if self.transaction_type not in TRANSACTION_TYPES:
+        if self.transaction_type not in {EXPENSE, INCOME}:
             raise ValueError("El tipo debe ser gasto o ingreso.")
         if self.alert_threshold < 1 or self.alert_threshold > 100:
             raise ValueError("La alerta debe estar entre 1 y 100.")
@@ -157,6 +158,7 @@ class Transaction:
     is_unexpected: bool = False
     debt_id: str | None = None
     account_id: str | None = None
+    destination_account_id: str | None = None
 
     def __post_init__(self) -> None:
         self.transaction_type = self.transaction_type.strip().lower()
@@ -165,12 +167,27 @@ class Transaction:
         self.payment_method = self.payment_method.strip() or "No especificado"
         if self.account_id is not None:
             self.account_id = self.account_id.strip() or None
+        if self.destination_account_id is not None:
+            self.destination_account_id = (
+                self.destination_account_id.strip() or None
+            )
         self.amount = validate_amount(self.amount)
 
         if self.transaction_type not in TRANSACTION_TYPES:
-            raise ValueError("El tipo debe ser gasto o ingreso.")
-        if not self.category:
+            raise ValueError("El tipo debe ser ingreso, gasto o transferencia.")
+        if self.transaction_type != TRANSFER and not self.category:
             raise ValueError("La transaccion necesita categoria.")
+        if self.transaction_type == TRANSFER:
+            self.category = ""
+            self.is_unexpected = False
+            self.recurring_id = None
+            self.debt_id = None
+            if not self.account_id:
+                raise ValueError("La transferencia necesita cuenta origen.")
+            if not self.destination_account_id:
+                raise ValueError("La transferencia necesita cuenta destino.")
+            if self.account_id == self.destination_account_id:
+                raise ValueError("La cuenta origen y destino deben ser distintas.")
         try:
             date.fromisoformat(self.tx_date)
         except ValueError as exc:
@@ -182,7 +199,7 @@ class Transaction:
         return cls(
             transaction_id=data.get("transaction_id", new_id()),
             transaction_type=data["transaction_type"],
-            category=data["category"],
+            category=data.get("category", ""),
             amount=data["amount"],
             tx_date=data.get("tx_date", today_iso()),
             description=data.get("description", ""),
@@ -191,6 +208,10 @@ class Transaction:
             is_unexpected=bool(data.get("is_unexpected", False)),
             debt_id=data.get("debt_id"),
             account_id=data.get("account_id", data.get("cuenta_id")),
+            destination_account_id=data.get(
+                "destination_account_id",
+                data.get("cuenta_destino_id"),
+            ),
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -223,7 +244,7 @@ class RecurringItem:
         self.amount = validate_amount(self.amount)
         self.day_of_month = int(self.day_of_month)
 
-        if self.transaction_type not in TRANSACTION_TYPES:
+        if self.transaction_type not in {EXPENSE, INCOME}:
             raise ValueError("El tipo debe ser gasto o ingreso.")
         if not self.category:
             raise ValueError("El recurrente necesita categoria.")
@@ -559,10 +580,11 @@ class MonthlyBudget:
 
     def add_or_update_transaction(self, transaction: Transaction) -> None:
         """Add or update a transaction."""
-        self._ensure_category_exists(
-            transaction.category,
-            transaction.transaction_type,
-        )
+        if transaction.transaction_type != TRANSFER:
+            self._ensure_category_exists(
+                transaction.category,
+                transaction.transaction_type,
+            )
         for index, current in enumerate(self.transactions):
             if current.transaction_id == transaction.transaction_id:
                 self.transactions[index] = transaction

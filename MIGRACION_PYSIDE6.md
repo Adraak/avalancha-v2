@@ -866,6 +866,52 @@ Compatibilidad:
 - Si una categoria formal no existe, Resumen Visual mantiene el fallback de la
   Etapa 14.1 para no romper datos antiguos.
 
+### Etapa 14.3 - Transferencias internas
+
+Estado: implementada para revision, sin commit de cierre.
+
+Decision tecnica:
+
+- Se usa un movimiento unico con `tipo = transferencia`.
+- `cuenta_id` representa la cuenta origen por compatibilidad.
+- `destination_account_id` / `cuenta_destino_id` representa la cuenta destino.
+- La transferencia no usa categoria, no puede ser imprevisto y no se trata como
+  recurrente.
+
+Reglas implementadas:
+
+- `MovementService` crea y edita transferencias internas validando monto,
+  cuenta origen, cuenta destino, cuentas existentes y origen distinto de
+  destino.
+- `ReconciliationService` descuenta el monto de la cuenta origen y lo suma a la
+  cuenta destino al calcular saldo registrado.
+- `AccountService` protege eliminacion de cuentas usadas como origen o destino
+  en transferencias historicas.
+- `DashboardVisualService`, `FinancialMetrics`, `BudgetService` y
+  `FinancialAlertService` mantienen las transferencias fuera de ingresos,
+  gastos, flujo libre, presupuesto, imprevistos y alertas financieras.
+- `ReportService` muestra las transferencias en una seccion separada:
+  `TRANSFERENCIAS INTERNAS`.
+- La UI de Movimientos permite seleccionar `Transferencia interna`, muestra
+  cuenta origen y cuenta destino, y oculta categoria e imprevisto.
+- La tabla de Movimientos muestra transferencias como `origen → destino` en la
+  columna Cuenta.
+- La pagina Cuentas permite abrir Movimientos filtrado por la cuenta
+  seleccionada. El historial incluye movimientos normales y transferencias
+  donde la cuenta sea origen o destino.
+
+Compatibilidad:
+
+- Los movimientos antiguos `ingreso` y `gasto` siguen usando `cuenta_id` y
+  `categoria` sin migracion destructiva.
+- Las transferencias nuevas conviven con el almacenamiento JSON existente.
+- Personal y Demo siguen aislados mediante el `data_dir` del perfil activo.
+
+Limitacion explicita:
+
+- Pago de deuda o tarjeta no se resuelve en esta etapa. Queda para
+  `Etapa 14.4 - Pago correcto de deudas/tarjetas`.
+
 ## Roadmap futuro - Analisis temporal de deudas
 
 ### Diagnostico de factibilidad
