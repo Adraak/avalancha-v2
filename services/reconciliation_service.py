@@ -152,6 +152,9 @@ class ReconciliationService:
                 continue
             if self._movement_account_id(movimiento) != account_id:
                 continue
+            if self._is_debt_payment(movimiento):
+                saldo -= self._amount(movimiento)
+                continue
             if account_type == "tarjeta_credito":
                 if self._is_expense(movimiento):
                     saldo += self._amount(movimiento)
@@ -394,6 +397,11 @@ class ReconciliationService:
     def _is_transfer(cls, movimiento: Movimiento | Any) -> bool:
         """Indica si el movimiento es transferencia interna."""
         return cls._transaction_type(movimiento) == "transferencia"
+
+    @classmethod
+    def _is_debt_payment(cls, movimiento: Movimiento | Any) -> bool:
+        """Indica si el movimiento corresponde a pago de deuda."""
+        return cls._transaction_type(movimiento) == "pago_deuda"
 
     @staticmethod
     def _amount(movimiento: Movimiento | Any) -> int:

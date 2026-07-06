@@ -14,6 +14,7 @@ from avalancha.models import (
     MonthlyBudget,
 )
 from avalancha.storage import BudgetRepository
+from services.account_service import AccountService
 from services.budget_service import BudgetService
 from services.dashboard_visual_service import DashboardVisualService
 from services.financial_alert_service import FinancialAlertService
@@ -206,6 +207,66 @@ class InternalTransfersTest(unittest.TestCase):
         self.assertEqual(
             origen.saldo_registrado + destino.saldo_registrado,
             110_000,
+        )
+
+    def test_cuentas_acumulan_transferencias_de_todos_los_meses(self) -> None:
+        """Cuentas muestra saldo actual sin depender del mes activo."""
+        self.movement_service.crear_transferencia(
+            "10-06-2026",
+            "origen",
+            "destino",
+            30_000,
+        )
+        self.repository.save(
+            MonthlyBudget(
+                year=2026,
+                month=7,
+                categories=[
+                    CategoryBudget("Sueldo", INCOME, 0, True),
+                    CategoryBudget("Comida", EXPENSE, 100_000, False),
+                ],
+            ),
+        )
+        MovementService(
+            data_dir=self.data_dir,
+            year=2026,
+            month=7,
+            repository=self.repository,
+        ).crear_transferencia(
+            "05-07-2026",
+            "destino",
+            "origen",
+            10_000,
+        )
+
+        junio = AccountService(
+            data_dir=self.data_dir,
+            year=2026,
+            month=6,
+            repository=self.repository,
+        )
+        julio = AccountService(
+            data_dir=self.data_dir,
+            year=2026,
+            month=7,
+            repository=self.repository,
+        )
+
+        self.assertEqual(
+            junio.obtener_cuenta_por_id("origen").registered_balance,
+            80_000,
+        )
+        self.assertEqual(
+            junio.obtener_cuenta_por_id("destino").registered_balance,
+            30_000,
+        )
+        self.assertEqual(
+            julio.obtener_cuenta_por_id("origen").registered_balance,
+            80_000,
+        )
+        self.assertEqual(
+            julio.obtener_cuenta_por_id("destino").registered_balance,
+            30_000,
         )
 
     def test_dashboard_excluye_transferencia_de_totales(self) -> None:

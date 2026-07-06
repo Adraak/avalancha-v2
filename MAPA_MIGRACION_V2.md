@@ -705,7 +705,7 @@ Reglas implementadas:
 
 ## Etapa 14.3 - Transferencias internas
 
-Estado: implementada para revision, sin commit de cierre.
+Estado: cerrada con commit `160c96e Etapa 14.3 Transferencias Internas`.
 
 | Archivo | Proposito | Contiene logica financiera | Contiene UI | Destino | Prioridad | Observaciones |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -728,6 +728,38 @@ Decision tecnica:
 - `cuenta_destino_id` queda como campo opcional nuevo.
 - Las transferencias aparecen en el historial de ambas cuentas.
 - No se implementa pago de deuda ni tarjeta en esta etapa.
+
+## Etapa 14.4 - Pago correcto de deudas/tarjetas
+
+Estado: implementada para revision, sin commit de cierre.
+
+| Archivo | Proposito | Contiene logica financiera | Contiene UI | Destino | Prioridad | Observaciones |
+| --- | --- | --- | --- | --- | --- | --- |
+| `avalancha/models.py` | Modelo persistible heredado | Si | No | `legacy/core` | Alta | `Transaction` acepta `pago_deuda` sin categoria ni cuenta destino. |
+| `core/models/movimiento.py` | Contrato V2 puro | Si | No | `core/` | Alta | `Movimiento` distingue pago de deuda de gasto y transferencia. |
+| `services/movement_service.py` | Registro de movimientos | Si | No | `services/` | Alta | Crea, edita y elimina pagos ajustando saldo de deuda. |
+| `services/debt_service.py` | Gestion de deudas | Si | No | `services/` | Alta | Expone operaciones para aplicar y revertir pagos de deuda. |
+| `services/reconciliation_service.py` | Saldos registrados por cuenta | Si | No | `services/` | Alta | Pago de deuda descuenta la cuenta origen. |
+| `services/report_service.py` | Reporte mensual | Si | No | `services/` | Media | Agrega seccion `PAGOS DE DEUDA`. |
+| `ui_pyside6/pages/movement_dialog.py` | Formulario de movimientos | No | Si | `ui_pyside6/` | Alta | Muestra selector de deuda y oculta categoria/destino/imprevisto. |
+| `ui_pyside6/pages/movement_page.py` | Tabla de movimientos | No | Si | `ui_pyside6/` | Alta | Muestra `Pago deuda: cuenta -> deuda`. |
+| `tests/test_v2_debt_payments.py` | Cobertura de etapa 14.4 | No | No | `tests/` | Alta | Verifica validaciones, saldos, reportes, presupuesto y aislamiento. |
+
+Decision tecnica:
+
+- Se usa un movimiento unico `tipo = pago_deuda`.
+- No se crea aun tabla separada de pagos formales.
+- Los pagos nuevos reducen `Debt.current_balance` y quedan en movimientos para
+  historial visible.
+- No se transforman movimientos historicos con `tipo = gasto` y `debt_id`.
+
+Riesgo documentado:
+
+- La persistencia JSON no es una transaccion real. `MovementService` valida todo
+  antes de guardar y aplica una reversa simple de deudas si falla el guardado
+  del presupuesto, pero la trazabilidad completa queda para 14.5.
+- El flujo libre sigue siendo operativo. La separacion con flujo de caja real
+  queda pendiente.
 
 ## Roadmap futuro - Analisis temporal de deudas
 

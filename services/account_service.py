@@ -25,15 +25,21 @@ class AccountService:
     def __init__(
         self,
         data_dir: str | Path = "data",
+        year: int | None = None,
+        month: int | None = None,
         repository: BudgetRepository | None = None,
     ) -> None:
         """Inicializa el servicio con el repositorio disponible."""
         self.repository = repository or BudgetRepository(data_dir)
+        self.year = year
+        self.month = month
 
     def obtener_cuentas(self) -> list[CuentaFinanciera]:
         """Devuelve todas las cuentas registradas."""
         return sorted(
-            self.repository.load_accounts(),
+            self._cuentas_con_saldo_registrado(
+                self.repository.load_accounts(),
+            ),
             key=lambda account: account.name.casefold(),
         )
 
@@ -43,7 +49,7 @@ class AccountService:
 
     def obtener_cuenta_por_id(self, cuenta_id: str) -> CuentaFinanciera:
         """Obtiene una cuenta por identificador estable."""
-        for cuenta in self.repository.load_accounts():
+        for cuenta in self.obtener_cuentas():
             if cuenta.account_id == cuenta_id:
                 return cuenta
         raise ValueError("La cuenta no existe.")
@@ -108,6 +114,62 @@ class AccountService:
             for key, label in self.TIPOS_CUENTA.items()
             if key in ACCOUNT_TYPES
         ]
+
+    def _cuentas_con_saldo_registrado(
+        self,
+        cuentas: list[CuentaFinanciera],
+    ) -> list[CuentaFinanciera]:
+        """Recalcula saldo registrado actual usando todos los meses."""
+        movimientos = self._movimientos_registrados()
+        for cuenta in cuentas:
+            cuenta.registered_balance = self._calcular_saldo_registrado(
+                cuenta,
+                movimientos,
+            )
+        return cuentas
+
+    def _movimientos_registrados(self) -> list[object]:
+        """Carga movimientos de todos los meses guardados del perfil."""
+        movimientos: list[object] = []
+        for label in self.repository.list_months():
+            year, month = (int(part) for part in label.split("-"))
+            movimientos.extend(self.repository.load(year, month).transactions)
+        return movimientos
+
+    @staticmethod
+    def _calcular_saldo_registrado(
+        cuenta: CuentaFinanciera,
+        movimientos: list[object],
+    ) -> int:
+        """Calcula saldo registrado desde movimientos asociados a la cuenta."""
+        saldo = cuenta.initial_balance
+        for movimiento in movimientos:
+            tipo = getattr(movimiento, "transaction_type", "")
+            monto = int(getattr(movimiento, "amount", 0))
+            cuenta_origen = getattr(movimiento, "account_id", "")
+            cuenta_destino = getattr(movimiento, "destination_account_id", "")
+            if tipo == "transferencia":
+                if cuenta_origen == cuenta.account_id:
+                    saldo -= monto
+                if cuenta_destino == cuenta.account_id:
+                    saldo += monto
+                continue
+            if cuenta_origen != cuenta.account_id:
+                continue
+            if tipo == "pago_deuda":
+                saldo -= monto
+                continue
+            if cuenta.account_type == "tarjeta_credito":
+                if tipo == "gasto":
+                    saldo += monto
+                elif tipo == "ingreso":
+                    saldo -= monto
+                continue
+            if tipo == "ingreso":
+                saldo += monto
+            elif tipo == "gasto":
+                saldo -= monto
+        return saldo
 
     def _cambiar_estado(
         self,

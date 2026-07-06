@@ -35,9 +35,16 @@ class Movimiento:
             self.cuenta_destino_id = self.cuenta_destino_id.strip() or None
         self.clase = self.clase.strip() or "Normal"
 
-        if self.tipo not in {"gasto", "ingreso", "transferencia"}:
-            raise ValueError("El tipo debe ser gasto, ingreso o transferencia.")
-        if self.tipo != "transferencia" and not self.categoria:
+        if self.tipo not in {
+            "gasto",
+            "ingreso",
+            "transferencia",
+            "pago_deuda",
+        }:
+            raise ValueError(
+                "El tipo debe ser gasto, ingreso, transferencia o pago de deuda."
+            )
+        if self.tipo not in {"transferencia", "pago_deuda"} and not self.categoria:
             raise ValueError("La categoria es obligatoria.")
         if not self.cuenta_id:
             raise ValueError("La cuenta financiera es obligatoria.")
@@ -57,6 +64,14 @@ class Movimiento:
                 raise ValueError(
                     "La cuenta origen y destino deben ser distintas."
                 )
+        if self.tipo == "pago_deuda":
+            self.categoria = ""
+            self.cuenta_destino_id = None
+            self.imprevisto = False
+            self.clase = "Pago de deuda"
+            self.recurrente_id = None
+            if not self.deuda_id:
+                raise ValueError("La deuda es obligatoria.")
 
     @property
     def es_gasto(self) -> bool:
@@ -72,6 +87,11 @@ class Movimiento:
     def es_transferencia(self) -> bool:
         """Indica si el movimiento corresponde a transferencia interna."""
         return self.tipo == "transferencia"
+
+    @property
+    def es_pago_deuda(self) -> bool:
+        """Indica si el movimiento corresponde a pago de deuda."""
+        return self.tipo == "pago_deuda"
 
     @property
     def transaction_type(self) -> str:

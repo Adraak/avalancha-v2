@@ -12,7 +12,8 @@ from uuid import uuid4
 EXPENSE = "gasto"
 INCOME = "ingreso"
 TRANSFER = "transferencia"
-TRANSACTION_TYPES = {EXPENSE, INCOME, TRANSFER}
+DEBT_PAYMENT = "pago_deuda"
+TRANSACTION_TYPES = {EXPENSE, INCOME, TRANSFER, DEBT_PAYMENT}
 DEBT_CATEGORIES = {
     "tarjeta_credito",
     "credito_consumo",
@@ -174,8 +175,10 @@ class Transaction:
         self.amount = validate_amount(self.amount)
 
         if self.transaction_type not in TRANSACTION_TYPES:
-            raise ValueError("El tipo debe ser ingreso, gasto o transferencia.")
-        if self.transaction_type != TRANSFER and not self.category:
+            raise ValueError(
+                "El tipo debe ser ingreso, gasto, transferencia o pago de deuda."
+            )
+        if self.transaction_type not in {TRANSFER, DEBT_PAYMENT} and not self.category:
             raise ValueError("La transaccion necesita categoria.")
         if self.transaction_type == TRANSFER:
             self.category = ""
@@ -188,6 +191,15 @@ class Transaction:
                 raise ValueError("La transferencia necesita cuenta destino.")
             if self.account_id == self.destination_account_id:
                 raise ValueError("La cuenta origen y destino deben ser distintas.")
+        if self.transaction_type == DEBT_PAYMENT:
+            self.category = ""
+            self.destination_account_id = None
+            self.is_unexpected = False
+            self.recurring_id = None
+            if not self.account_id:
+                raise ValueError("El pago de deuda necesita cuenta origen.")
+            if not self.debt_id:
+                raise ValueError("El pago de deuda necesita deuda.")
         try:
             date.fromisoformat(self.tx_date)
         except ValueError as exc:
@@ -580,7 +592,7 @@ class MonthlyBudget:
 
     def add_or_update_transaction(self, transaction: Transaction) -> None:
         """Add or update a transaction."""
-        if transaction.transaction_type != TRANSFER:
+        if transaction.transaction_type not in {TRANSFER, DEBT_PAYMENT}:
             self._ensure_category_exists(
                 transaction.category,
                 transaction.transaction_type,

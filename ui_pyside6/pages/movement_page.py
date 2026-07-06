@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QHeaderView,
@@ -38,6 +38,8 @@ class SortableItem(QTableWidgetItem):
 
 class MovementsPage(QWidget):
     """Pantalla CRUD de movimientos usando MovementService."""
+
+    movements_changed = Signal(str)
 
     HEADERS = [
         "Fecha",
@@ -105,6 +107,7 @@ class MovementsPage(QWidget):
             self._show_error(str(exc))
             return
         self.refresh()
+        self.movements_changed.emit("created")
 
     def edit_selected(self) -> None:
         """Edita el movimiento seleccionado."""
@@ -124,6 +127,7 @@ class MovementsPage(QWidget):
             self._show_error(str(exc))
             return
         self.refresh()
+        self.movements_changed.emit("updated")
 
     def delete_selected(self) -> None:
         """Elimina el movimiento seleccionado tras confirmar."""
@@ -144,6 +148,7 @@ class MovementsPage(QWidget):
             self._show_error(str(exc))
             return
         self.refresh()
+        self.movements_changed.emit("deleted")
 
     def _build_ui(self) -> None:
         """Construye buscador, tabla y botones de accion."""
@@ -212,13 +217,13 @@ class MovementsPage(QWidget):
     def _configure_table_columns(self) -> None:
         """Ajusta anchos para leer transferencias origen-destino."""
         widths = {
-            0: 110,
-            1: 170,
-            2: 520,
-            3: 120,
-            4: 260,
-            5: 130,
-            6: 130,
+            0: 95,
+            1: 140,
+            2: 360,
+            3: 110,
+            4: 190,
+            5: 100,
+            6: 110,
         }
         for column, width in widths.items():
             self.table.setColumnWidth(column, width)
@@ -279,6 +284,9 @@ class MovementsPage(QWidget):
     def _account_display(self, movement: Movimiento) -> str:
         """Devuelve cuenta visible, con origen y destino si aplica."""
         origin = self.service.nombre_cuenta(movement.cuenta_id)
+        if movement.es_pago_deuda:
+            debt = self.service.nombre_deuda(movement.deuda_id or "")
+            return f"Pago deuda: {origin} -> {debt}"
         if not movement.es_transferencia:
             return origin
         destination = self.service.nombre_cuenta(
@@ -291,6 +299,8 @@ class MovementsPage(QWidget):
         """Devuelve categoria visible para la tabla."""
         if movement.es_transferencia:
             return "Transferencia interna"
+        if movement.es_pago_deuda:
+            return "Pago de deuda"
         return movement.categoria
 
     @staticmethod
@@ -298,6 +308,8 @@ class MovementsPage(QWidget):
         """Devuelve tipo visible en espanol."""
         if movement.es_transferencia:
             return "Transferencia"
+        if movement.es_pago_deuda:
+            return "Pago de deuda"
         return movement.tipo.capitalize()
 
     def _show_error(self, message: str) -> None:

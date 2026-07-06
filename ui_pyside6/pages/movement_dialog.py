@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from datetime import date
 
-from PySide6.QtCore import QDate
+from PySide6.QtCore import QDate, QRegularExpression
+from PySide6.QtGui import QRegularExpressionValidator
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -38,20 +39,24 @@ class MovementDialog(QDialog):
             "Editar movimiento" if movement else "Nuevo movimiento",
         )
         self.setMinimumWidth(460)
+        self._formatting_amount = False
         self.date_input = QDateEdit()
         self.type_input = QComboBox()
         self.category_input = QComboBox()
         self.account_input = QComboBox()
         self.destination_account_input = QComboBox()
+        self.debt_input = QComboBox()
         self.amount_input = QLineEdit()
         self.description_input = QLineEdit()
         self.unexpected_input = QCheckBox("Marcar como imprevisto")
         self.category_label = QLabel("Categoria")
         self.account_label = QLabel("Cuenta")
         self.destination_account_label = QLabel("Cuenta destino")
+        self.debt_label = QLabel("Deuda")
         self.unexpected_label = QLabel("Imprevisto")
         self._build_ui()
         self._load_accounts()
+        self._load_debts()
         self._load_initial_values()
 
     def obtener_datos(self) -> dict[str, object]:
@@ -62,7 +67,8 @@ class MovementDialog(QDialog):
             "categoria": self._categoria_actual(),
             "cuenta_id": self.account_input.currentData(),
             "cuenta_destino_id": self.destination_account_input.currentData(),
-            "monto": self.amount_input.text(),
+            "deuda_id": self.debt_input.currentData(),
+            "monto": self._parse_clp_amount(self.amount_input.text()),
             "descripcion": self.description_input.text(),
             "imprevisto": self.unexpected_input.isChecked(),
         }
@@ -82,6 +88,7 @@ class MovementDialog(QDialog):
         self.type_input.addItem("Gasto", "gasto")
         self.type_input.addItem("Ingreso", "ingreso")
         self.type_input.addItem("Transferencia interna", "transferencia")
+        self.type_input.addItem("Pago de deuda", "pago_deuda")
         self.type_input.currentIndexChanged.connect(self._on_type_changed)
 
         form.addRow("Fecha", self.date_input)
@@ -92,6 +99,7 @@ class MovementDialog(QDialog):
             self.destination_account_label,
             self.destination_account_input,
         )
+        form.addRow(self.debt_label, self.debt_input)
         form.addRow("Monto", self.amount_input)
         form.addRow("Descripcion", self.description_input)
         form.addRow(self.unexpected_label, self.unexpected_input)
@@ -109,6 +117,12 @@ class MovementDialog(QDialog):
 
         layout.addLayout(form)
         layout.addWidget(buttons)
+        amount_validator = QRegularExpressionValidator(
+            QRegularExpression(r"[0-9.]*"),
+            self.amount_input,
+        )
+        self.amount_input.setValidator(amount_validator)
+        self.amount_input.textChanged.connect(self._format_amount_live)
         self._update_transfer_fields()
 
     def _load_accounts(self) -> None:
@@ -119,9 +133,15 @@ class MovementDialog(QDialog):
             self.account_input.addItem(account.nombre, account.id)
             self.destination_account_input.addItem(account.nombre, account.id)
 
+    def _load_debts(self) -> None:
+        """Carga deudas activas desde el servicio."""
+        self.debt_input.clear()
+        for debt in self.service.obtener_deudas():
+            self.debt_input.addItem(debt.nombre, debt.id)
+
     def _load_categories(self) -> None:
         """Carga categorias segun el tipo seleccionado."""
-        if self._es_transferencia():
+        if self._es_transferencia() or self._es_pago_deuda():
             self.category_input.clear()
             return
         current = self.category_input.currentText()
@@ -164,7 +184,11 @@ class MovementDialog(QDialog):
         if destination_index >= 0:
             self.destination_account_input.setCurrentIndex(destination_index)
 
-        self.amount_input.setText(str(self.movement.monto))
+        debt_index = self.debt_input.findData(self.movement.deuda_id)
+        if debt_index >= 0:
+            self.debt_input.setCurrentIndex(debt_index)
+
+        self.amount_input.setText(self._format_clp_amount(self.movement.monto))
         self.description_input.setText(self.movement.descripcion)
         self.unexpected_input.setChecked(self.movement.imprevisto)
         self._update_transfer_fields()
@@ -175,29 +199,131 @@ class MovementDialog(QDialog):
         self._update_transfer_fields()
 
     def _update_transfer_fields(self) -> None:
-        """Muestra origen/destino y oculta categoria si es transferencia."""
+        """Muestra campos segun tipo financiero seleccionado."""
         es_transferencia = self._es_transferencia()
-        self.category_label.setVisible(not es_transferencia)
-        self.category_input.setVisible(not es_transferencia)
-        self.unexpected_label.setVisible(not es_transferencia)
-        self.unexpected_input.setVisible(not es_transferencia)
+        es_pago_deuda = self._es_pago_deuda()
+        requiere_categoria = not (es_transferencia or es_pago_deuda)
+        self.category_label.setVisible(requiere_categoria)
+        self.category_input.setVisible(requiere_categoria)
+        self.unexpected_label.setVisible(requiere_categoria)
+        self.unexpected_input.setVisible(requiere_categoria)
         self.destination_account_label.setVisible(es_transferencia)
         self.destination_account_input.setVisible(es_transferencia)
+        self.debt_label.setVisible(es_pago_deuda)
+        self.debt_input.setVisible(es_pago_deuda)
         self.account_label.setText(
-            "Cuenta origen" if es_transferencia else "Cuenta",
+            "Cuenta origen"
+            if es_transferencia or es_pago_deuda
+            else "Cuenta",
         )
-        if es_transferencia:
+        if es_transferencia or es_pago_deuda:
             self.unexpected_input.setChecked(False)
 
     def _categoria_actual(self) -> str:
         """Devuelve categoria solo para ingresos o gastos."""
-        if self._es_transferencia():
+        if self._es_transferencia() or self._es_pago_deuda():
             return ""
         return self.category_input.currentText()
 
     def _es_transferencia(self) -> bool:
         """Indica si el tipo actual es transferencia interna."""
         return self.type_input.currentData() == "transferencia"
+
+    def _es_pago_deuda(self) -> bool:
+        """Indica si el tipo actual es pago de deuda."""
+        return self.type_input.currentData() == "pago_deuda"
+
+    def _format_amount_live(self, text: str) -> None:
+        """Formatea el monto mientras se escribe evitando loops de senal."""
+        if self._formatting_amount:
+            return
+        digits = self._digits_from_live_amount_text(text)
+        if not digits:
+            return
+        cursor = self.amount_input.cursorPosition()
+        digits_to_right = sum(
+            1 for char in text[cursor:] if char.isdigit()
+        )
+        formatted = self._format_digits_as_clp(digits)
+        if formatted == text:
+            return
+        self._formatting_amount = True
+        try:
+            self.amount_input.setText(formatted)
+            self.amount_input.setCursorPosition(
+                self._cursor_position_from_right_digits(
+                    formatted,
+                    digits_to_right,
+                ),
+            )
+        finally:
+            self._formatting_amount = False
+
+    @classmethod
+    def _format_clp_amount(cls, value: int | str) -> str:
+        """Formatea un monto entero CLP sin simbolo peso."""
+        digits = cls._digits_from_live_amount_text(value)
+        if not digits:
+            raise ValueError("Ingresa un monto valido.")
+        if int(digits) <= 0:
+            raise ValueError("Ingresa un monto valido.")
+        return cls._format_digits_as_clp(digits)
+
+    @classmethod
+    def _parse_clp_amount(cls, text: int | str) -> int:
+        """Convierte texto CLP con puntos de miles a entero."""
+        digits = cls._digits_from_amount_text(text)
+        amount = int(digits)
+        if amount <= 0:
+            raise ValueError("Ingresa un monto valido.")
+        return amount
+
+    @staticmethod
+    def _digits_from_amount_text(text: int | str) -> str:
+        """Extrae digitos desde un monto con formato CLP valido."""
+        raw = str(text).strip()
+        if not raw:
+            raise ValueError("Ingresa un monto valido.")
+        if any(char not in "0123456789." for char in raw):
+            raise ValueError("Ingresa un monto valido.")
+        if raw.startswith(".") or raw.endswith(".") or ".." in raw:
+            raise ValueError("Ingresa un monto valido.")
+        if "." in raw:
+            groups = raw.split(".")
+            if not groups[0] or len(groups[0]) > 3:
+                raise ValueError("Ingresa un monto valido.")
+            if any(len(group) != 3 for group in groups[1:]):
+                raise ValueError("Ingresa un monto valido.")
+        digits = raw.replace(".", "")
+        if not digits.isdigit():
+            raise ValueError("Ingresa un monto valido.")
+        return digits
+
+    @staticmethod
+    def _digits_from_live_amount_text(text: int | str) -> str:
+        """Extrae digitos para formateo visual tolerando puntos intermedios."""
+        return "".join(char for char in str(text) if char.isdigit())
+
+    @staticmethod
+    def _format_digits_as_clp(digits: str) -> str:
+        """Formatea digitos como CLP con puntos de miles."""
+        return f"{int(digits):,}".replace(",", ".")
+
+    @staticmethod
+    def _cursor_position_from_right_digits(
+        text: str,
+        digits_to_right: int,
+    ) -> int:
+        """Calcula posicion de cursor preservando digitos a la derecha."""
+        if digits_to_right <= 0:
+            return len(text)
+        seen = 0
+        for index in range(len(text) - 1, -1, -1):
+            if text[index].isdigit():
+                seen += 1
+            if seen == digits_to_right:
+                return index
+        return 0
 
     @staticmethod
     def _to_qdate(value: date) -> QDate:

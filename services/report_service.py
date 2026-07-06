@@ -141,6 +141,7 @@ class ReportService:
             budget=budget,
             movimientos=movimientos,
             cuentas=accounts,
+            deudas=debts,
             indicadores=indicators,
             conciliacion=reconciliacion,
             ejecucion=ejecucion,
@@ -223,6 +224,7 @@ class ReportService:
         budget: MonthlyBudget,
         movimientos: list[Any],
         cuentas: list[Any],
+        deudas: list[Any],
         indicadores: Any,
         conciliacion: dict[str, object],
         ejecucion: list[dict[str, object]],
@@ -370,6 +372,10 @@ class ReportService:
             SeccionReporte(
                 "TRANSFERENCIAS INTERNAS",
                 self._lineas_transferencias(movimientos, cuentas),
+            ),
+            SeccionReporte(
+                "PAGOS DE DEUDA",
+                self._lineas_pagos_deuda(movimientos, cuentas, deudas),
             ),
             SeccionReporte(
                 "DIAGNOSTICO FINANCIERO",
@@ -540,6 +546,43 @@ class ReportService:
             lineas.append(
                 f"- {movimiento.fecha.strftime('%d-%m-%Y')} | "
                 f"{origen} → {destino} | "
+                f"{ReportService._format_clp(int(movimiento.monto))} | "
+                f"{movimiento.descripcion or 'Sin descripcion'}",
+            )
+        return lineas
+
+    @staticmethod
+    def _lineas_pagos_deuda(
+        movimientos: list[Any],
+        cuentas: list[Any],
+        deudas: list[Any],
+    ) -> list[str]:
+        """Renderiza pagos de deuda en una seccion separada."""
+        pagos = [
+            movimiento
+            for movimiento in movimientos
+            if getattr(movimiento, "tipo", "") == "pago_deuda"
+        ]
+        if not pagos:
+            return ["Sin pagos de deuda registrados."]
+        nombres_cuentas = {
+            getattr(cuenta, "account_id", ""): getattr(cuenta, "name", "")
+            for cuenta in cuentas
+        }
+        nombres_deudas = {
+            getattr(deuda, "debt_id", ""): getattr(deuda, "name", "")
+            for deuda in deudas
+        }
+        lineas = []
+        for movimiento in pagos:
+            origen = nombres_cuentas.get(movimiento.cuenta_id, "Sin cuenta")
+            deuda = nombres_deudas.get(
+                movimiento.deuda_id,
+                "Sin deuda",
+            )
+            lineas.append(
+                f"- {movimiento.fecha.strftime('%d-%m-%Y')} | "
+                f"{origen} -> {deuda} | "
                 f"{ReportService._format_clp(int(movimiento.monto))} | "
                 f"{movimiento.descripcion or 'Sin descripcion'}",
             )

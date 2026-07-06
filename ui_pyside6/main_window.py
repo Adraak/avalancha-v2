@@ -248,7 +248,11 @@ class MainWindow(QMainWindow):
             month=month,
             category_service=category_service,
         )
-        account_service = AccountService(data_dir=data_dir)
+        account_service = AccountService(
+            data_dir=data_dir,
+            year=year,
+            month=month,
+        )
         debt_service = DebtService(data_dir=data_dir)
         reconciliation_service = ReconciliationService(
             data_dir=data_dir,
@@ -270,6 +274,9 @@ class MainWindow(QMainWindow):
         accounts_page = AccountsPage(account_service)
         accounts_page.movements_requested.connect(
             self._open_account_movements,
+        )
+        movements_page.movements_changed.connect(
+            self.refresh_financial_views,
         )
         profiles_page = ProfilesPage(
             self.profile_service,
@@ -304,6 +311,22 @@ class MainWindow(QMainWindow):
         button.setChecked(True)
         section = button.text()
         self.active_section_label.setText(f"Sección activa: {section}")
+        self._refresh_widget(self.stack.currentWidget())
+
+    def refresh_financial_views(self, reason: str = "") -> None:
+        """Recarga paginas financieras despues de cambiar movimientos."""
+        _ = reason
+        for page_index in range(self.stack.count()):
+            self._refresh_widget(self.stack.widget(page_index))
+
+    @staticmethod
+    def _refresh_widget(widget: QWidget | None) -> None:
+        """Invoca refresh si la pagina expone recarga de datos."""
+        if widget is None:
+            return
+        refresh = getattr(widget, "refresh", None)
+        if callable(refresh):
+            refresh()
 
     def _open_account_movements(
         self,

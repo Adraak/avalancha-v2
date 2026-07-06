@@ -91,6 +91,45 @@ class DebtService:
         """Marca una deuda como inactiva."""
         return self._cambiar_estado(debt_id, False)
 
+    def registrar_pago_deuda(self, debt_id: str, monto: int | str) -> Debt:
+        """Reduce el saldo de una deuda activa por un pago confirmado."""
+        amount = self._normalizar_monto(
+            monto,
+            "El monto del pago debe ser numerico.",
+        )
+        if amount <= 0:
+            raise ValueError("El monto del pago debe ser mayor que cero.")
+        debts = self.repository.load_debts()
+        index = self._buscar_indice(debts, debt_id)
+        debt = debts[index]
+        self._validar_deuda_pagable(debt)
+        if amount > debt.current_balance:
+            raise ValueError(
+                "El pago no puede superar el saldo actual de la deuda."
+            )
+        debt.current_balance -= amount
+        debt.updated_at = today_iso()
+        debts[index] = debt
+        self.repository.save_debts(debts)
+        return debt
+
+    def revertir_pago_deuda(self, debt_id: str, monto: int | str) -> Debt:
+        """Revierte un pago de deuda eliminado o editado."""
+        amount = self._normalizar_monto(
+            monto,
+            "El monto del pago debe ser numerico.",
+        )
+        if amount <= 0:
+            raise ValueError("El monto del pago debe ser mayor que cero.")
+        debts = self.repository.load_debts()
+        index = self._buscar_indice(debts, debt_id)
+        debt = debts[index]
+        debt.current_balance += amount
+        debt.updated_at = today_iso()
+        debts[index] = debt
+        self.repository.save_debts(debts)
+        return debt
+
     def categorias_disponibles(self) -> list[tuple[str, str]]:
         """Devuelve categorias disponibles para la interfaz."""
         return [
@@ -212,6 +251,14 @@ class DebtService:
             raise ValueError("La categoría de deuda no es válida.")
         if debt.current_monthly_payment <= 0:
             raise ValueError("El pago mensual debe ser mayor que cero.")
+
+    @staticmethod
+    def _validar_deuda_pagable(debt: Debt) -> None:
+        """Valida que una deuda pueda recibir pagos."""
+        if not debt.active:
+            raise ValueError("No se puede pagar una deuda inactiva.")
+        if debt.current_balance <= 0:
+            raise ValueError("La deuda ya no tiene saldo pendiente.")
 
     @staticmethod
     def _validar_nombre_duplicado(

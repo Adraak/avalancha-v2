@@ -7,11 +7,12 @@ from datetime import date, datetime
 from pathlib import Path
 from uuid import uuid4
 
-from avalancha.models import Transaction
+from avalancha.models import Debt, Transaction, today_iso
 from avalancha.storage import BudgetRepository
 
 from core.models.movimiento import Movimiento
 from services.category_service import CategoryService
+from services.debt_service import DebtService
 
 
 @dataclass(frozen=True, slots=True)
@@ -20,6 +21,15 @@ class OpcionCuenta:
 
     id: str
     nombre: str
+
+
+@dataclass(frozen=True, slots=True)
+class OpcionDeuda:
+    """Representa una deuda disponible para formularios."""
+
+    id: str
+    nombre: str
+    saldo_actual: int
 
 
 class MovementService:
@@ -32,6 +42,7 @@ class MovementService:
         month: int | None = None,
         repository: BudgetRepository | None = None,
         category_service: CategoryService | None = None,
+        debt_service: DebtService | None = None,
     ) -> None:
         """Inicializa el servicio para un mes de trabajo."""
         today = date.today()
@@ -39,6 +50,10 @@ class MovementService:
         self.month = month or today.month
         self.repository = repository or BudgetRepository(data_dir)
         self.category_service = category_service or CategoryService(
+            data_dir=self.repository.data_dir,
+            repository=self.repository,
+        )
+        self.debt_service = debt_service or DebtService(
             data_dir=self.repository.data_dir,
             repository=self.repository,
         )
@@ -65,13 +80,24 @@ class MovementService:
         descripcion: str = "",
         imprevisto: bool = False,
         cuenta_destino_id: str | None = None,
+        deuda_id: str | None = None,
     ) -> Movimiento:
         """Crea y persiste un movimiento nuevo."""
-        if str(tipo).strip().lower() == "transferencia":
+        normalized_type = str(tipo).strip().lower()
+        if normalized_type == "transferencia":
             return self.crear_transferencia(
                 fecha=fecha,
                 cuenta_origen_id=cuenta_id,
                 cuenta_destino_id=cuenta_destino_id,
+                monto=monto,
+                descripcion=descripcion,
+                imprevisto=imprevisto,
+            )
+        if normalized_type == "pago_deuda":
+            return self.crear_pago_deuda(
+                fecha=fecha,
+                cuenta_origen_id=cuenta_id,
+                deuda_id=deuda_id,
                 monto=monto,
                 descripcion=descripcion,
                 imprevisto=imprevisto,
@@ -92,6 +118,38 @@ class MovementService:
         budget = self.repository.load(self.year, self.month)
         budget.add_or_update_transaction(self._a_transaccion(movimiento))
         self.repository.save(budget)
+        return movimiento
+
+    def crear_pago_deuda(
+        self,
+        fecha: date | str,
+        cuenta_origen_id: str,
+        deuda_id: str | None,
+        monto: int | str,
+        descripcion: str = "",
+        imprevisto: bool = False,
+    ) -> Movimiento:
+        """Crea un pago de deuda sin registrarlo como gasto mensual."""
+        if imprevisto:
+            raise ValueError("El pago de deuda no puede ser imprevisto.")
+        movimiento = Movimiento(
+            id=uuid4().hex,
+            fecha=self._normalizar_fecha(fecha),
+            tipo="pago_deuda",
+            categoria="",
+            descripcion=descripcion,
+            monto=self._normalizar_monto(monto),
+            cuenta_id=cuenta_origen_id,
+            medio_pago="Pago de deuda",
+            deuda_id=deuda_id,
+            imprevisto=False,
+            clase="Pago de deuda",
+        )
+        self._validar_movimiento(movimiento)
+        budget = self.repository.load(self.year, self.month)
+        budget.add_or_update_transaction(self._a_transaccion(movimiento))
+        debts = self._deudas_ajustadas_por_pago(None, movimiento)
+        self._guardar_budget_y_deudas(budget, debts)
         return movimiento
 
     def crear_transferencia(
@@ -136,12 +194,14 @@ class MovementService:
         descripcion: str = "",
         imprevisto: bool | None = None,
         cuenta_destino_id: str | None = None,
+        deuda_id: str | None = None,
     ) -> Movimiento:
         """Actualiza un movimiento existente."""
         original = self._obtener_transaccion(movimiento_id)
         if original is None:
             raise ValueError("El movimiento no existe.")
-        if str(tipo).strip().lower() == "transferencia":
+        normalized_type = str(tipo).strip().lower()
+        if normalized_type == "transferencia":
             if imprevisto:
                 raise ValueError("La transferencia no puede ser imprevisto.")
             movimiento = Movimiento(
@@ -160,7 +220,30 @@ class MovementService:
             self._validar_movimiento(movimiento)
             budget = self.repository.load(self.year, self.month)
             budget.add_or_update_transaction(self._a_transaccion(movimiento))
-            self.repository.save(budget)
+            debts = self._deudas_ajustadas_por_pago(original, movimiento)
+            self._guardar_budget_y_deudas(budget, debts)
+            return movimiento
+        if normalized_type == "pago_deuda":
+            if imprevisto:
+                raise ValueError("El pago de deuda no puede ser imprevisto.")
+            movimiento = Movimiento(
+                id=movimiento_id,
+                fecha=self._normalizar_fecha(fecha),
+                tipo="pago_deuda",
+                categoria="",
+                descripcion=descripcion,
+                monto=self._normalizar_monto(monto),
+                cuenta_id=cuenta_id,
+                medio_pago="Pago de deuda",
+                deuda_id=deuda_id or original.debt_id,
+                imprevisto=False,
+                clase="Pago de deuda",
+            )
+            self._validar_movimiento(movimiento)
+            budget = self.repository.load(self.year, self.month)
+            budget.add_or_update_transaction(self._a_transaccion(movimiento))
+            debts = self._deudas_ajustadas_por_pago(original, movimiento)
+            self._guardar_budget_y_deudas(budget, debts)
             return movimiento
         es_imprevisto = (
             original.is_unexpected if imprevisto is None else bool(imprevisto)
@@ -175,7 +258,14 @@ class MovementService:
             cuenta_id=cuenta_id,
             medio_pago=self._medio_pago_por_cuenta(cuenta_id),
             recurrente_id=original.recurring_id,
-            deuda_id=original.debt_id,
+            deuda_id=(
+                deuda_id
+                or (
+                    original.debt_id
+                    if original.transaction_type != "pago_deuda"
+                    else None
+                )
+            ),
             imprevisto=es_imprevisto,
             clase=self._clase_por_flags(es_imprevisto, original.recurring_id),
         )
@@ -185,14 +275,24 @@ class MovementService:
         )
         budget = self.repository.load(self.year, self.month)
         budget.add_or_update_transaction(self._a_transaccion(movimiento))
-        self.repository.save(budget)
+        debts = self._deudas_ajustadas_por_pago(original, movimiento)
+        self._guardar_budget_y_deudas(budget, debts)
         return movimiento
 
     def eliminar_movimiento(self, movimiento_id: str) -> None:
         """Elimina un movimiento persistido."""
         budget = self.repository.load(self.year, self.month)
+        original = next(
+            (
+                item
+                for item in budget.transactions
+                if item.transaction_id == movimiento_id
+            ),
+            None,
+        )
         budget.delete_transaction(movimiento_id)
-        self.repository.save(budget)
+        debts = self._deudas_ajustadas_por_pago(original, None)
+        self._guardar_budget_y_deudas(budget, debts)
 
     def buscar_movimientos(self, texto: str) -> list[Movimiento]:
         """Busca movimientos por texto libre."""
@@ -200,6 +300,7 @@ class MovementService:
         if not filtro:
             return self.obtener_movimientos()
         cuentas = self._mapa_cuentas()
+        deudas = self._mapa_deudas()
         encontrados = []
         for movimiento in self.obtener_movimientos():
             destino = ""
@@ -214,6 +315,7 @@ class MovementService:
                     str(movimiento.monto),
                     cuentas.get(movimiento.cuenta_id, ""),
                     destino,
+                    deudas.get(movimiento.deuda_id or "", ""),
                     movimiento.clase,
                 ]
             ).casefold()
@@ -270,9 +372,20 @@ class MovementService:
         ]
         return sorted(cuentas, key=lambda item: item.nombre.casefold())
 
+    def obtener_deudas(self) -> list[OpcionDeuda]:
+        """Devuelve deudas activas disponibles para pagos."""
+        return [
+            OpcionDeuda(item.debt_id, item.name, item.current_balance)
+            for item in self.debt_service.obtener_deudas_activas()
+        ]
+
     def nombre_cuenta(self, cuenta_id: str) -> str:
         """Devuelve el nombre de una cuenta por identificador."""
         return self._mapa_cuentas().get(cuenta_id, "Sin cuenta")
+
+    def nombre_deuda(self, deuda_id: str) -> str:
+        """Devuelve el nombre visible de una deuda por identificador."""
+        return self._mapa_deudas().get(deuda_id, "Sin deuda")
 
     def _validar_movimiento(
         self,
@@ -294,6 +407,20 @@ class MovementService:
                 )
             if movimiento.imprevisto:
                 raise ValueError("La transferencia no puede ser imprevisto.")
+            return
+        if movimiento.tipo == "pago_deuda":
+            if movimiento.cuenta_id not in cuentas:
+                raise ValueError("La cuenta origen seleccionada no existe.")
+            if movimiento.imprevisto:
+                raise ValueError("El pago de deuda no puede ser imprevisto.")
+            if movimiento.recurrente_id:
+                raise ValueError("El pago de deuda no puede ser recurrente.")
+            debts = {
+                item.debt_id: item
+                for item in self.debt_service.obtener_deudas_activas()
+            }
+            if movimiento.deuda_id not in debts:
+                raise ValueError("La deuda seleccionada no existe.")
             return
         permitir_inactiva = (
             categoria_original is not None
@@ -365,6 +492,13 @@ class MovementService:
         """Construye un mapa id-nombre de cuentas activas."""
         return {item.id: item.nombre for item in self.obtener_cuentas()}
 
+    def _mapa_deudas(self) -> dict[str, str]:
+        """Construye un mapa id-nombre de deudas activas e historicas."""
+        return {
+            item.debt_id: item.name
+            for item in self.debt_service.obtener_deudas()
+        }
+
     def _medio_pago_por_cuenta(self, cuenta_id: str) -> str:
         """Sugiere un medio de pago segun el tipo de cuenta."""
         cuentas = {
@@ -389,10 +523,61 @@ class MovementService:
         """Clasifica visualmente una transaccion heredada."""
         if transaction.transaction_type == "transferencia":
             return "Transferencia"
+        if transaction.transaction_type == "pago_deuda":
+            return "Pago de deuda"
         return MovementService._clase_por_flags(
             transaction.is_unexpected,
             transaction.recurring_id,
         )
+
+    def _deudas_ajustadas_por_pago(
+        self,
+        original: Transaction | None,
+        nuevo: Movimiento | None,
+    ) -> list[Debt]:
+        """Calcula nuevos saldos de deuda al crear, editar o eliminar pagos."""
+        debts = self.repository.load_debts()
+        by_id = {debt.debt_id: debt for debt in debts}
+
+        if (
+            original is not None
+            and original.transaction_type == "pago_deuda"
+            and original.debt_id
+        ):
+            debt = by_id.get(original.debt_id)
+            if debt is None:
+                raise ValueError("La deuda original del pago no existe.")
+            debt.current_balance += original.amount
+            debt.updated_at = today_iso()
+
+        if nuevo is not None and nuevo.tipo == "pago_deuda":
+            debt = by_id.get(nuevo.deuda_id or "")
+            if debt is None:
+                raise ValueError("La deuda seleccionada no existe.")
+            if not debt.active:
+                raise ValueError("No se puede pagar una deuda inactiva.")
+            if nuevo.monto > debt.current_balance:
+                raise ValueError(
+                    "El pago no puede superar el saldo actual de la deuda."
+                )
+            debt.current_balance -= nuevo.monto
+            debt.updated_at = today_iso()
+
+        return debts
+
+    def _guardar_budget_y_deudas(
+        self,
+        budget,
+        debts: list[Debt],
+    ) -> None:
+        """Persiste presupuesto y deudas con reversa simple ante fallo."""
+        original_debts = self.repository.load_debts()
+        self.repository.save_debts(debts)
+        try:
+            self.repository.save(budget)
+        except Exception:
+            self.repository.save_debts(original_debts)
+            raise
 
     @staticmethod
     def _clase_por_flags(

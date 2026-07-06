@@ -909,8 +909,51 @@ Compatibilidad:
 
 Limitacion explicita:
 
-- Pago de deuda o tarjeta no se resuelve en esta etapa. Queda para
-  `Etapa 14.4 - Pago correcto de deudas/tarjetas`.
+- Pago de deuda o tarjeta queda resuelto en la etapa siguiente mediante
+  `tipo = pago_deuda`, sin contar el pago como gasto nuevo.
+
+## Etapa 14.4 - Pago correcto de deudas/tarjetas
+
+Estado: implementada para revision, sin commit de cierre.
+
+Decision tecnica:
+
+- Se agrega movimiento unico `tipo = pago_deuda`.
+- `cuenta_id` representa la cuenta origen desde donde sale el dinero.
+- `deuda_id` representa la deuda o tarjeta pagada.
+- El pago no requiere categoria, no puede ser imprevisto y no puede ser
+  recurrente.
+- El pago reduce el saldo actual de la deuda y baja el saldo registrado de la
+  cuenta origen en conciliacion.
+- El pago no aumenta gastos reales, no consume presupuesto, no aparece en
+  gastos por categoria, no aparece en gastos por clase y no afecta
+  imprevistos.
+- Reportes muestra los pagos en la seccion separada `PAGOS DE DEUDA`.
+
+Diferencia conceptual:
+
+- Compra con tarjeta: es gasto real y debe afectar categoria, presupuesto y
+  reporte de gastos.
+- Pago de tarjeta o deuda: es salida de caja para reducir pasivo; no es gasto
+  nuevo y no debe duplicar el gasto original.
+
+Compatibilidad:
+
+- Los movimientos antiguos `ingreso`, `gasto` y `transferencia` siguen siendo
+  legibles.
+- Los gastos antiguos con `debt_id` no se convierten automaticamente en
+  `pago_deuda`.
+- `BudgetRepository.debt_payment_totals()` se mantiene para compatibilidad con
+  gastos historicos vinculados a deuda; los pagos nuevos reducen directamente
+  el saldo de deuda.
+
+Deuda tecnica futura:
+
+- `Etapa 14.5 - Trazabilidad de deuda` debe agregar registros formales de
+  pagos con saldo anterior, saldo posterior, snapshots y auditoria mensual.
+- El Dashboard aun usa flujo operativo (`ingresos - gastos`). Queda pendiente
+  separar flujo operativo de flujo de caja real, donde los pagos de deuda
+  saldrian explicitamente como compromisos financieros.
 
 ## Roadmap futuro - Analisis temporal de deudas
 
