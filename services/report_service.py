@@ -491,20 +491,22 @@ class ReportService:
 
     @staticmethod
     def _contar_imprevistos(movimientos: list[Any]) -> int:
-        """Cuenta movimientos marcados como imprevistos."""
+        """Cuenta solo gastos reales marcados como imprevistos."""
         return sum(
             1
             for movimiento in movimientos
-            if bool(getattr(movimiento, "imprevisto", False))
+            if ReportService._es_gasto_real(movimiento)
+            and ReportService._es_imprevisto(movimiento)
         )
 
     @staticmethod
     def _lineas_imprevistos(movimientos: list[Any]) -> list[str]:
-        """Renderiza movimientos imprevistos sin perder su clase."""
+        """Renderiza gastos imprevistos sin mezclar otros tipos."""
         imprevistos = [
             movimiento
             for movimiento in movimientos
-            if bool(getattr(movimiento, "imprevisto", False))
+            if ReportService._es_gasto_real(movimiento)
+            and ReportService._es_imprevisto(movimiento)
         ]
         if not imprevistos:
             return ["Sin datos."]
@@ -518,6 +520,27 @@ class ReportService:
             )
             for movimiento in imprevistos
         ]
+
+    @staticmethod
+    def _es_gasto_real(movimiento: Any) -> bool:
+        """Indica si el movimiento debe tratarse como gasto real."""
+        tipo = getattr(
+            movimiento,
+            "tipo",
+            getattr(movimiento, "transaction_type", ""),
+        )
+        return str(tipo).strip().lower() == "gasto"
+
+    @staticmethod
+    def _es_imprevisto(movimiento: Any) -> bool:
+        """Indica si el movimiento trae marca de imprevisto."""
+        return bool(
+            getattr(
+                movimiento,
+                "imprevisto",
+                getattr(movimiento, "is_unexpected", False),
+            )
+        )
 
     @staticmethod
     def _lineas_transferencias(

@@ -294,11 +294,11 @@ class ReconciliationService:
         )
 
     def _saldo_registrado_actual(self, cuenta: CuentaFinanciera) -> int:
-        """Calcula saldo registrado desde movimientos y tipo de cuenta."""
-        return self.calcular_saldo_registrado(
-            cuenta,
-            self.movement_service.obtener_movimientos(),
+        """Obtiene el saldo registrado acumulado desde cuentas."""
+        cuenta_actual = self.account_service.obtener_cuenta_por_id(
+            self._account_id(cuenta),
         )
+        return self._registered_balance(cuenta_actual)
 
     @staticmethod
     def _resolver_estado(estado: str, diferencia: int | None) -> str:

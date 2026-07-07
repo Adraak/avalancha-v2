@@ -1081,3 +1081,43 @@ Riesgos pendientes:
 - La comparacion mensual depende de snapshots existentes. Para mejorar calidad
   historica se recomienda agregar cierre mensual automatico por deuda en una
   etapa posterior.
+
+## Etapa 15 - Reportes y metricas coherentes
+
+Estado: implementada para revision, sin commit de cierre.
+
+Objetivo:
+
+Alinear reportes, dashboard, presupuestos, cuentas, conciliacion,
+transferencias y pagos de deuda con las reglas oficiales de movimiento.
+
+Reglas oficiales:
+
+- Solo `ingreso` cuenta como ingreso real.
+- Solo `gasto` cuenta como gasto real.
+- `transferencia` solo mueve dinero entre cuentas propias; no cuenta como
+  ingreso, gasto, presupuesto ni imprevisto.
+- `pago_deuda` reduce deuda y descuenta la cuenta origen; no cuenta como gasto,
+  presupuesto ni imprevisto.
+- Presupuestos solo se consumen con gastos reales.
+- Imprevistos solo aplican a gastos reales.
+- Reportes deben separar ingresos, gastos reales, pagos de deuda,
+  transferencias internas, deudas, presupuestos e imprevistos.
+
+Implementado:
+
+- `ReportService` filtra imprevistos solo sobre gastos reales.
+- `ReconciliationService` toma el saldo registrado acumulado desde
+  `AccountService`, evitando una conciliacion mensual distinta a Cuentas.
+- Se deja explicita la compatibilidad legacy de
+  `BudgetRepository.debt_payment_totals()`: solo suma movimientos antiguos de
+  tipo `gasto` con `debt_id`; no suma movimientos nuevos `pago_deuda`.
+- Se agregan pruebas transversales para ingreso, gasto normal, gasto
+  imprevisto, transferencia interna, pago de deuda, deuda, presupuesto y
+  conciliacion multimes.
+
+Riesgos pendientes:
+
+- La ruta legacy `debt_payment_totals()` debe mantenerse solo para datos
+  antiguos hasta que exista una migracion formal de movimientos historicos.
+- No se implemento cierre mensual ni backup en esta etapa.

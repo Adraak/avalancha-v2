@@ -872,3 +872,36 @@ Riesgos pendientes:
 - No se separa capital real versus interes real; solo se usa la traza formal
   disponible.
 - Los graficos temporales quedan para una etapa visual posterior.
+
+## Etapa 15 - Reportes y metricas coherentes
+
+Estado: implementada para revision, sin commit de cierre.
+
+| Archivo | Proposito | Contiene logica financiera | Contiene UI | Destino | Prioridad | Observaciones |
+| --- | --- | --- | --- | --- | --- | --- |
+| `services/report_service.py` | Reportes mensuales cifrados | Si | No | `services/` | Alta | Imprevistos quedan limitados a movimientos tipo `gasto`; transferencias y pagos de deuda permanecen en secciones separadas. |
+| `services/reconciliation_service.py` | Conciliacion de cuentas | Si | No | `services/` | Alta | El saldo registrado se lee desde `AccountService` para coincidir con Cuentas en escenarios multimes. |
+| `avalancha/storage.py` | Persistencia heredada compatible | Si | No | `legacy/storage` | Alta | `debt_payment_totals()` queda documentado como compatibilidad para gastos antiguos con `debt_id`; no incluye `pago_deuda`. |
+| `tests/test_v2_financial_coherence.py` | Cobertura transversal de coherencia financiera | No | No | `tests/` | Alta | Valida ingresos, gastos, presupuesto, imprevistos, transferencias, pagos de deuda, deuda y conciliacion multimes. |
+
+Reglas oficiales documentadas:
+
+- `ingreso`: suma ingresos reales.
+- `gasto`: suma gastos reales, consume presupuesto y puede ser imprevisto.
+- `transferencia`: mueve saldo entre cuentas; no afecta ingresos, gastos,
+  presupuesto ni imprevistos.
+- `pago_deuda`: reduce deuda y cuenta origen; no afecta gastos, presupuesto ni
+  imprevistos.
+
+Decision tecnica:
+
+- La UI sigue sin acceder a JSON ni a almacenamiento.
+- La coherencia de conciliacion se centraliza reutilizando el saldo acumulado
+  de Cuentas.
+- Los reportes no duplican calculos de movimiento; solo corrigen su filtro de
+  detalle para respetar el tipo del movimiento.
+
+Riesgos pendientes:
+
+- La coexistencia entre pagos legacy y `pago_deuda` nuevo requiere mantener
+  tests de regresion mientras existan datos historicos antiguos.
