@@ -842,3 +842,33 @@ y tendencia. El detalle con curvas y pagos debe vivir dentro del modulo Deudas.
 - `tests/test_v2_debt_service.py`
 - `tests/test_v2_architecture.py` actualizado para importar `DebtService`
   sin cargar frameworks de UI.
+
+## Etapa 14.6 - Analisis temporal de deudas
+
+Estado: implementada para revision, sin commit de cierre.
+
+| Archivo | Proposito | Contiene logica financiera | Contiene UI | Destino | Prioridad | Observaciones |
+| --- | --- | --- | --- | --- | --- | --- |
+| `services/debt_analytics_service.py` | Analisis temporal de pagos y snapshots de deuda | Si | No | `services/` | Alta | Consolida evolucion por deuda, deuda total, pagos mensuales, resumen y pagos recientes. |
+| `services/__init__.py` | Exportacion de servicios V2 | No | No | `services/` | Media | Expone `DebtAnalyticsService`. |
+| `ui_pyside6/pages/debts_page.py` | Pantalla PySide6 de deudas | No | Si | `ui_pyside6/` | Alta | Muestra tarjetas temporales y tabla de pagos recientes usando el servicio. |
+| `tests/test_v2_debt_analytics_service.py` | Cobertura de analisis temporal | No | No | `tests/` | Alta | Verifica agrupacion mensual, evolucion, deuda total, tendencia, pagos recientes y aislamiento. |
+
+Decision tecnica:
+
+- El analisis temporal usa exclusivamente `DebtPayment` y `DebtSnapshot`.
+- No se interpolan saldos ni se inventan curvas con un unico dato.
+- La UI no accede a JSON ni a `BudgetRepository`; consume
+  `DebtAnalyticsService`.
+- La deuda total en el tiempo se reconstruye aplicando el ultimo snapshot
+  conocido por deuda en cada fecha disponible.
+- La tendencia compara el mes solicitado contra el ultimo total disponible
+  antes de ese mes.
+
+Riesgos pendientes:
+
+- Aun no existe snapshot formal de cierre mensual por deuda, por lo que la
+  calidad de la curva depende de los pagos y ajustes registrados.
+- No se separa capital real versus interes real; solo se usa la traza formal
+  disponible.
+- Los graficos temporales quedan para una etapa visual posterior.

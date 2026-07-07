@@ -36,6 +36,7 @@ class V2ArchitectureTest(unittest.TestCase):
             from services.category_service import CategoryService
             from services.dashboard_visual_service import DashboardVisualService
             from services.demo_profile_service import DemoProfileService
+            from services.debt_analytics_service import DebtAnalyticsService
             from services.debt_service import DebtService
             from services.financial_alert_service import FinancialAlertService
             from services.financial_summary_service import FinancialSummaryService
@@ -106,6 +107,7 @@ class V2ArchitectureTest(unittest.TestCase):
             )
             DemoProfileService(profile_service)
             DebtService(data_dir=root / "data")
+            DebtAnalyticsService(data_dir=root / "data")
             ReportService(
                 data_dir=root / "data",
                 reports_dir=root / "reportes",

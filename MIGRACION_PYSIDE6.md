@@ -1039,3 +1039,45 @@ snapshots y no duplicacion de gastos. Luego corresponde:
 
 En esa etapa se podran agregar curvas de saldo por deuda, barras de pagos
 mensuales, tendencias y resumen sintetico para el Dashboard.
+
+## Etapa 14.6 - Analisis temporal de deudas
+
+Estado: implementada para revision, sin commit de cierre.
+
+Objetivo:
+
+Convertir la trazabilidad de 14.5 en consultas temporales reutilizables para
+Deudas y futuros graficos, sin crear datos ficticios ni proyecciones.
+
+Implementado:
+
+- `DebtAnalyticsService` en `services/debt_analytics_service.py`.
+- Evolucion por deuda desde `DebtSnapshot`.
+- Deuda total en el tiempo desde el ultimo snapshot conocido por deuda.
+- Pagos mensuales agrupados por anio y mes desde `DebtPayment`.
+- Resumen temporal con deuda total actual, pagado del mes, variacion y
+  tendencia.
+- Pagos recientes con deuda, cuenta, monto, saldo anterior y saldo posterior.
+- Pantalla Deudas con tarjetas de sintesis temporal y tabla de pagos recientes.
+- Tests de analisis temporal y aislamiento entre perfiles.
+
+Decision tecnica:
+
+- `DebtAnalyticsService` coordina `DebtService` y el repositorio del perfil.
+- La UI no calcula tendencias ni lee almacenamiento.
+- Si no hay suficientes snapshots, la serie temporal queda vacia o el resumen
+  marca `sin_datos`.
+- No se agregan librerias graficas nuevas en esta etapa.
+
+Fuera de alcance:
+
+- Graficos temporales avanzados.
+- Snapshots automaticos de cierre mensual.
+- Separacion contable entre capital e interes real.
+- Proyecciones futuras de extincion.
+
+Riesgos pendientes:
+
+- La comparacion mensual depende de snapshots existentes. Para mejorar calidad
+  historica se recomienda agregar cierre mensual automatico por deuda en una
+  etapa posterior.

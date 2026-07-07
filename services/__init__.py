@@ -6,6 +6,7 @@ from services.budget_service import BudgetService
 from services.category_service import CategoryService
 from services.dashboard_visual_service import DashboardVisualService
 from services.demo_profile_service import DemoProfileService
+from services.debt_analytics_service import DebtAnalyticsService
 from services.debt_service import DebtService
 from services.financial_alert_service import FinancialAlertService
 from services.financial_summary_service import FinancialSummaryService
@@ -22,6 +23,7 @@ __all__ = [
     "CategoryService",
     "DashboardVisualService",
     "DemoProfileService",
+    "DebtAnalyticsService",
     "DebtService",
     "FinancialAlertService",
     "FinancialSummaryService",
