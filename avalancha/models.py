@@ -381,6 +381,131 @@ class Debt:
 
 
 @dataclass
+class DebtPayment:
+    """Formal payment trace linked to a debt movement."""
+
+    debt_id: str
+    account_id: str
+    tx_date: str
+    amount: int
+    balance_before: int
+    balance_after: int
+    movement_id: str | None = None
+    payment_type: str = "pago"
+    estimated_interest: int = 0
+    note: str = ""
+    payment_id: str = field(default_factory=new_id)
+    created_at: str = field(default_factory=now_iso)
+
+    def __post_init__(self) -> None:
+        self.debt_id = self.debt_id.strip()
+        self.account_id = self.account_id.strip()
+        self.payment_type = self.payment_type.strip().lower() or "pago"
+        self.note = self.note.strip()
+        if self.movement_id is not None:
+            self.movement_id = self.movement_id.strip() or None
+        self.amount = validate_amount(self.amount)
+        self.balance_before = validate_amount(self.balance_before)
+        self.balance_after = validate_amount(self.balance_after)
+        self.estimated_interest = validate_amount(self.estimated_interest)
+
+        if not self.debt_id:
+            raise ValueError("El pago necesita deuda asociada.")
+        if not self.account_id:
+            raise ValueError("El pago necesita cuenta origen.")
+        if self.amount <= 0:
+            raise ValueError("El monto del pago debe ser mayor que cero.")
+        if self.balance_after > self.balance_before:
+            raise ValueError("El saldo posterior no puede ser mayor al anterior.")
+        try:
+            date.fromisoformat(self.tx_date)
+        except ValueError as exc:
+            raise ValueError("La fecha debe usar formato YYYY-MM-DD.") from exc
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "DebtPayment":
+        """Create an instance from JSON-compatible data."""
+        return cls(
+            payment_id=data.get("payment_id", new_id()),
+            movement_id=data.get("movement_id"),
+            debt_id=data["debt_id"],
+            account_id=data["account_id"],
+            tx_date=data["tx_date"],
+            amount=data["amount"],
+            balance_before=data["balance_before"],
+            balance_after=data["balance_after"],
+            payment_type=data.get("payment_type", "pago"),
+            estimated_interest=data.get("estimated_interest", 0),
+            note=data.get("note", ""),
+            created_at=data.get("created_at", now_iso()),
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return JSON-compatible data."""
+        return asdict(self)
+
+
+@dataclass
+class DebtSnapshot:
+    """Immutable debt balance point for audit and later trend analysis."""
+
+    debt_id: str
+    tx_date: str
+    balance: int
+    source: str
+    movement_id: str | None = None
+    previous_balance: int | None = None
+    note: str = ""
+    snapshot_id: str = field(default_factory=new_id)
+    created_at: str = field(default_factory=now_iso)
+
+    def __post_init__(self) -> None:
+        self.debt_id = self.debt_id.strip()
+        self.source = self.source.strip().lower()
+        self.note = self.note.strip()
+        if self.movement_id is not None:
+            self.movement_id = self.movement_id.strip() or None
+        self.balance = validate_amount(self.balance)
+        if self.previous_balance is not None:
+            self.previous_balance = validate_amount(self.previous_balance)
+
+        if not self.debt_id:
+            raise ValueError("El snapshot necesita deuda asociada.")
+        valid_sources = {
+            "manual",
+            "pago",
+            "cierre_mensual",
+            "ajuste",
+            "reversa",
+        }
+        if self.source not in valid_sources:
+            raise ValueError("El origen del snapshot no es valido.")
+        try:
+            date.fromisoformat(self.tx_date)
+        except ValueError as exc:
+            raise ValueError("La fecha debe usar formato YYYY-MM-DD.") from exc
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "DebtSnapshot":
+        """Create an instance from JSON-compatible data."""
+        return cls(
+            snapshot_id=data.get("snapshot_id", new_id()),
+            movement_id=data.get("movement_id"),
+            debt_id=data["debt_id"],
+            tx_date=data["tx_date"],
+            balance=data["balance"],
+            previous_balance=data.get("previous_balance"),
+            source=data.get("source", "manual"),
+            note=data.get("note", ""),
+            created_at=data.get("created_at", now_iso()),
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return JSON-compatible data."""
+        return asdict(self)
+
+
+@dataclass
 class CuentaFinanciera:
     """Manual financial account used for reconciliation."""
 

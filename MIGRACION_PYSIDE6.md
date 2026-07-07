@@ -947,31 +947,60 @@ Compatibilidad:
   gastos historicos vinculados a deuda; los pagos nuevos reducen directamente
   el saldo de deuda.
 
-Deuda tecnica futura:
+Trazabilidad posterior:
 
-- `Etapa 14.5 - Trazabilidad de deuda` debe agregar registros formales de
-  pagos con saldo anterior, saldo posterior, snapshots y auditoria mensual.
+- `Etapa 14.5 - Trazabilidad de deuda` agrega registros formales de pagos con
+  saldo anterior, saldo posterior y snapshots de auditoria.
 - El Dashboard aun usa flujo operativo (`ingresos - gastos`). Queda pendiente
   separar flujo operativo de flujo de caja real, donde los pagos de deuda
   saldrian explicitamente como compromisos financieros.
+
+## Etapa 14.5 - Trazabilidad de deuda
+
+Estado: implementada para revision, sin commit de cierre.
+
+Objetivo:
+
+Crear una bitacora formal para pagos de deuda sin cambiar la regla de 14.4: el
+pago reduce pasivo y caja, pero no aumenta gastos ni consume presupuesto.
+
+Implementado:
+
+- `DebtPayment` en `avalancha/models.py`, vinculado al movimiento
+  `pago_deuda`.
+- `DebtSnapshot` en `avalancha/models.py`, con saldo anterior, saldo posterior
+  y origen del evento.
+- Persistencia en `debt_payments.json` y `debt_snapshots.json`.
+- `MovementService` crea traza formal al registrar pagos de deuda.
+- Editar un pago revierte la traza anterior y crea una nueva.
+- Eliminar un pago remueve el pago activo, revierte saldo y conserva snapshot
+  de reversa.
+- `DebtService` consulta pagos y snapshots filtrados por deuda.
+- `tests/test_v2_debt_traceability.py` cubre creacion, edicion, eliminacion y
+  filtros.
+
+Fuera de alcance:
+
+- Graficos temporales de deuda.
+- Separacion de capital versus interes real.
+- Snapshots de cierre mensual por deuda.
+- Servicio dedicado de analisis temporal.
 
 ## Roadmap futuro - Analisis temporal de deudas
 
 ### Diagnostico de factibilidad
 
-El modelo actual no debe usarse todavia para graficar curvas historicas de
-deuda por deuda. Hoy existen deudas con saldo actual, saldo del mes anterior,
-pago mensual planificado y movimientos con `debt_id`, pero no existe una tabla
-formal de pagos de deuda ni snapshots historicos de saldo.
+El modelo actual ya registra pagos formales y snapshots por evento de pago, pero
+todavia no debe usarse directamente para graficar curvas historicas de deuda por
+deuda. Falta un servicio que consolide cierres mensuales, pagos y ajustes con
+reglas explicitas de consulta.
 
 `BudgetRepository.debt_payment_totals()` suma movimientos de gasto vinculados a
 deudas. Esa informacion sirve como aproximacion de pagos acumulados, pero no
 permite reconstruir con certeza:
 
-- saldo anterior y saldo posterior de cada pago;
 - interes versus capital;
 - pagos por fecha con trazabilidad completa;
-- transferencias internas separadas de ingresos y gastos;
 - historial mensual confiable para graficos de linea.
 
 ### Datos actuales que sirven
@@ -987,10 +1016,8 @@ permite reconstruir con certeza:
 
 Antes de implementar graficos temporales se requiere modelar:
 
-- `debt_payments`: pago de deuda con deuda, cuenta origen, fecha, monto,
-  saldo anterior, saldo posterior, tipo de pago e interes estimado opcional.
-- `debt_snapshots`: historial de saldo por deuda, fecha y origen del dato.
-- transferencias internas separadas de ingresos y gastos.
+- consulta temporal sobre `debt_payments` y `debt_snapshots`.
+- snapshots de cierre mensual por deuda.
 - regla explicita para pago de tarjeta: compra con tarjeta es gasto; pago de
   tarjeta es reduccion de deuda, no gasto nuevo.
 
@@ -1001,8 +1028,8 @@ son:
 
 - `Etapa 14.2 - Gestion de Categorias`.
 - `Etapa 14.3 - Transferencias internas`.
-- `Etapa 14.4 - Pago correcto de deudas/tarjetas`.
-- `Etapa 14.5 - Trazabilidad de deuda`.
+- `Etapa 14.4 - Pago correcto de deudas/tarjetas` (implementada para revision).
+- `Etapa 14.5 - Trazabilidad de deuda` (implementada para revision).
 
 Esas etapas deben cerrar categorias administrables, transferencias internas,
 registro formal de pagos, asociacion con cuenta origen, actualizacion de saldo,

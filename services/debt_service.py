@@ -4,7 +4,14 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from avalancha.models import DEBT_CATEGORIES, Debt, new_id, today_iso
+from avalancha.models import (
+    DEBT_CATEGORIES,
+    Debt,
+    DebtPayment,
+    DebtSnapshot,
+    new_id,
+    today_iso,
+)
 from avalancha.storage import BudgetRepository
 
 
@@ -44,6 +51,40 @@ class DebtService:
             if debt.debt_id == debt_id:
                 return debt
         raise ValueError("La deuda no existe.")
+
+    def obtener_pagos_deuda(
+        self,
+        debt_id: str | None = None,
+    ) -> list[DebtPayment]:
+        """Devuelve pagos formales ordenados por fecha."""
+        payments = self.repository.load_debt_payments()
+        if debt_id is not None:
+            payments = [
+                payment
+                for payment in payments
+                if payment.debt_id == debt_id
+            ]
+        return sorted(
+            payments,
+            key=lambda payment: (payment.tx_date, payment.payment_id),
+        )
+
+    def obtener_snapshots_deuda(
+        self,
+        debt_id: str | None = None,
+    ) -> list[DebtSnapshot]:
+        """Devuelve snapshots de deuda ordenados por fecha de creacion."""
+        snapshots = self.repository.load_debt_snapshots()
+        if debt_id is not None:
+            snapshots = [
+                snapshot
+                for snapshot in snapshots
+                if snapshot.debt_id == debt_id
+            ]
+        return sorted(
+            snapshots,
+            key=lambda snapshot: (snapshot.tx_date, snapshot.created_at),
+        )
 
     def crear_deuda(self, datos: dict[str, object]) -> Debt:
         """Crea y persiste una deuda."""

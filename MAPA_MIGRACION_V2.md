@@ -748,7 +748,7 @@ Estado: implementada para revision, sin commit de cierre.
 Decision tecnica:
 
 - Se usa un movimiento unico `tipo = pago_deuda`.
-- No se crea aun tabla separada de pagos formales.
+- No se crea aun tabla separada `debt_payments`.
 - Los pagos nuevos reducen `Debt.current_balance` y quedan en movimientos para
   historial visible.
 - No se transforman movimientos historicos con `tipo = gasto` y `debt_id`.
@@ -757,17 +757,42 @@ Riesgo documentado:
 
 - La persistencia JSON no es una transaccion real. `MovementService` valida todo
   antes de guardar y aplica una reversa simple de deudas si falla el guardado
-  del presupuesto, pero la trazabilidad completa queda para 14.5.
+  del presupuesto. La trazabilidad formal queda abordada en 14.5.
 - El flujo libre sigue siendo operativo. La separacion con flujo de caja real
   queda pendiente.
+
+## Etapa 14.5 - Trazabilidad de deuda
+
+Estado: implementada para revision, sin commit de cierre.
+
+| Archivo | Proposito | Contiene logica financiera | Contiene UI | Destino | Prioridad | Observaciones |
+| --- | --- | --- | --- | --- | --- | --- |
+| `avalancha/models.py` | Modelos persistibles heredados | Si | No | `legacy/core` | Alta | Agrega `DebtPayment` y `DebtSnapshot` con saldos anterior/posterior. |
+| `avalancha/storage.py` | Persistencia JSON | Si | No | `legacy/core` | Alta | Agrega `debt_payments.json` y `debt_snapshots.json`. |
+| `services/movement_service.py` | Registro de movimientos | Si | No | `services/` | Alta | Crea, reemplaza o revierte trazas al crear, editar o eliminar pagos. |
+| `services/debt_service.py` | Consulta de deudas | Si | No | `services/` | Media | Expone pagos y snapshots filtrables por deuda. |
+| `tests/test_v2_debt_traceability.py` | Cobertura de etapa 14.5 | No | No | `tests/` | Alta | Verifica pago formal, snapshots, edicion, eliminacion y filtros. |
+
+Decision tecnica:
+
+- `DebtPayment` representa el pago activo asociado a un movimiento
+  `pago_deuda`.
+- `DebtSnapshot` conserva eventos de saldo por pago y por reversa para
+  auditoria.
+- Editar un pago elimina la traza activa anterior, revierte el saldo, registra
+  snapshot de reversa y crea una nueva traza formal.
+- Eliminar un pago remueve el pago activo, revierte el saldo de la deuda y deja
+  snapshot de reversa.
+- No se implementa aun analisis temporal ni graficos; 14.5 solo deja datos
+  confiables para construirlos en 14.6.
 
 ## Roadmap futuro - Analisis temporal de deudas
 
 ### Diagnostico arquitectonico
 
-El analisis temporal de deudas queda registrado como mejora futura, pero no se
-implementa en esta etapa porque la trazabilidad actual no alcanza para graficos
-confiables.
+El analisis temporal de deudas queda registrado como mejora futura. La etapa
+14.5 ya deja pagos y snapshots formales, pero todavia falta un servicio de
+consulta temporal preparado para graficos confiables.
 
 El sistema actual permite:
 
@@ -775,27 +800,29 @@ El sistema actual permite:
 - conocer saldo actual y saldo del mes anterior;
 - vincular movimientos a una deuda mediante `debt_id`;
 - asociar movimientos a cuenta financiera mediante `cuenta_id`;
-- sumar pagos historicos aproximados con `BudgetRepository.debt_payment_totals()`.
+- sumar pagos historicos aproximados con `BudgetRepository.debt_payment_totals()`;
+- consultar pagos formales y snapshots de deuda generados desde 14.5.
 
 El sistema actual no permite todavia:
 
-- distinguir formalmente pago de deuda versus gasto comun;
 - separar compra con tarjeta y pago posterior de tarjeta sin riesgo de doble
   conteo;
-- registrar saldo anterior y saldo posterior por pago;
-- reconstruir una serie historica mensual por deuda;
+- reconstruir una serie historica mensual por deuda desde un servicio dedicado;
 - distinguir capital, interes, ajuste y pago minimo;
-- separar transferencias internas de ingresos/gastos.
+- consolidar snapshots mensuales de cierre por deuda.
 
 ### Cambios de modelo necesarios
 
-Se recomienda crear mas adelante:
+Ya existe:
 
 - `DebtPayment`: registro formal de pago con `deuda_id`, `cuenta_origen_id`,
   fecha, monto pagado, tipo de pago, saldo anterior, saldo posterior, interes
   estimado y nota.
 - `DebtSnapshot`: punto historico de saldo con `deuda_id`, fecha, saldo y
   origen (`manual`, `pago`, `cierre_mensual`, `ajuste`).
+
+Se recomienda crear mas adelante:
+
 - `DebtAnalysisService`: servicio de consulta para evolucion de saldos, pagos
   por mes, tendencia por deuda y resumen de deuda total.
 

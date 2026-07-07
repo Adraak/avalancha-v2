@@ -7,7 +7,13 @@ from datetime import date, datetime
 from pathlib import Path
 from uuid import uuid4
 
-from avalancha.models import Debt, Transaction, today_iso
+from avalancha.models import (
+    Debt,
+    DebtPayment,
+    DebtSnapshot,
+    Transaction,
+    today_iso,
+)
 from avalancha.storage import BudgetRepository
 
 from core.models.movimiento import Movimiento
@@ -30,6 +36,15 @@ class OpcionDeuda:
     id: str
     nombre: str
     saldo_actual: int
+
+
+@dataclass(slots=True)
+class DebtTraceState:
+    """Agrupa datos de deuda que deben persistirse juntos."""
+
+    debts: list[Debt]
+    payments: list[DebtPayment]
+    snapshots: list[DebtSnapshot]
 
 
 class MovementService:
@@ -148,8 +163,8 @@ class MovementService:
         self._validar_movimiento(movimiento)
         budget = self.repository.load(self.year, self.month)
         budget.add_or_update_transaction(self._a_transaccion(movimiento))
-        debts = self._deudas_ajustadas_por_pago(None, movimiento)
-        self._guardar_budget_y_deudas(budget, debts)
+        trace = self._deudas_ajustadas_por_pago(None, movimiento)
+        self._guardar_budget_y_trazas(budget, trace)
         return movimiento
 
     def crear_transferencia(
@@ -220,8 +235,8 @@ class MovementService:
             self._validar_movimiento(movimiento)
             budget = self.repository.load(self.year, self.month)
             budget.add_or_update_transaction(self._a_transaccion(movimiento))
-            debts = self._deudas_ajustadas_por_pago(original, movimiento)
-            self._guardar_budget_y_deudas(budget, debts)
+            trace = self._deudas_ajustadas_por_pago(original, movimiento)
+            self._guardar_budget_y_trazas(budget, trace)
             return movimiento
         if normalized_type == "pago_deuda":
             if imprevisto:
@@ -242,8 +257,8 @@ class MovementService:
             self._validar_movimiento(movimiento)
             budget = self.repository.load(self.year, self.month)
             budget.add_or_update_transaction(self._a_transaccion(movimiento))
-            debts = self._deudas_ajustadas_por_pago(original, movimiento)
-            self._guardar_budget_y_deudas(budget, debts)
+            trace = self._deudas_ajustadas_por_pago(original, movimiento)
+            self._guardar_budget_y_trazas(budget, trace)
             return movimiento
         es_imprevisto = (
             original.is_unexpected if imprevisto is None else bool(imprevisto)
@@ -275,8 +290,8 @@ class MovementService:
         )
         budget = self.repository.load(self.year, self.month)
         budget.add_or_update_transaction(self._a_transaccion(movimiento))
-        debts = self._deudas_ajustadas_por_pago(original, movimiento)
-        self._guardar_budget_y_deudas(budget, debts)
+        trace = self._deudas_ajustadas_por_pago(original, movimiento)
+        self._guardar_budget_y_trazas(budget, trace)
         return movimiento
 
     def eliminar_movimiento(self, movimiento_id: str) -> None:
@@ -291,8 +306,8 @@ class MovementService:
             None,
         )
         budget.delete_transaction(movimiento_id)
-        debts = self._deudas_ajustadas_por_pago(original, None)
-        self._guardar_budget_y_deudas(budget, debts)
+        trace = self._deudas_ajustadas_por_pago(original, None)
+        self._guardar_budget_y_trazas(budget, trace)
 
     def buscar_movimientos(self, texto: str) -> list[Movimiento]:
         """Busca movimientos por texto libre."""
@@ -534,9 +549,11 @@ class MovementService:
         self,
         original: Transaction | None,
         nuevo: Movimiento | None,
-    ) -> list[Debt]:
-        """Calcula nuevos saldos de deuda al crear, editar o eliminar pagos."""
+    ) -> DebtTraceState:
+        """Calcula saldos y trazas al crear, editar o eliminar pagos."""
         debts = self.repository.load_debts()
+        payments = self.repository.load_debt_payments()
+        snapshots = self.repository.load_debt_snapshots()
         by_id = {debt.debt_id: debt for debt in debts}
 
         if (
@@ -544,39 +561,120 @@ class MovementService:
             and original.transaction_type == "pago_deuda"
             and original.debt_id
         ):
-            debt = by_id.get(original.debt_id)
-            if debt is None:
-                raise ValueError("La deuda original del pago no existe.")
-            debt.current_balance += original.amount
-            debt.updated_at = today_iso()
+            self._revertir_traza_pago(original, by_id, payments, snapshots)
 
         if nuevo is not None and nuevo.tipo == "pago_deuda":
-            debt = by_id.get(nuevo.deuda_id or "")
-            if debt is None:
-                raise ValueError("La deuda seleccionada no existe.")
-            if not debt.active:
-                raise ValueError("No se puede pagar una deuda inactiva.")
-            if nuevo.monto > debt.current_balance:
-                raise ValueError(
-                    "El pago no puede superar el saldo actual de la deuda."
-                )
-            debt.current_balance -= nuevo.monto
-            debt.updated_at = today_iso()
+            self._registrar_traza_pago(nuevo, by_id, payments, snapshots)
 
-        return debts
+        return DebtTraceState(debts, payments, snapshots)
 
-    def _guardar_budget_y_deudas(
+    def _revertir_traza_pago(
+        self,
+        original: Transaction,
+        debts: dict[str, Debt],
+        payments: list[DebtPayment],
+        snapshots: list[DebtSnapshot],
+    ) -> None:
+        """Revierte el saldo y elimina el pago activo asociado al movimiento."""
+        debt = debts.get(original.debt_id or "")
+        if debt is None:
+            raise ValueError("La deuda original del pago no existe.")
+
+        payment = next(
+            (
+                item
+                for item in payments
+                if item.movement_id == original.transaction_id
+            ),
+            None,
+        )
+        amount = payment.amount if payment else original.amount
+        previous_balance = debt.current_balance
+        debt.current_balance += amount
+        debt.updated_at = today_iso()
+
+        if payment is not None:
+            payments.remove(payment)
+
+        snapshots.append(
+            DebtSnapshot(
+                movement_id=original.transaction_id,
+                debt_id=original.debt_id or "",
+                tx_date=original.tx_date,
+                previous_balance=previous_balance,
+                balance=debt.current_balance,
+                source="reversa",
+                note="Reversa de pago de deuda.",
+            )
+        )
+
+    def _registrar_traza_pago(
+        self,
+        movimiento: Movimiento,
+        debts: dict[str, Debt],
+        payments: list[DebtPayment],
+        snapshots: list[DebtSnapshot],
+    ) -> None:
+        """Registra pago formal y snapshot de saldo posterior."""
+        debt = debts.get(movimiento.deuda_id or "")
+        if debt is None:
+            raise ValueError("La deuda seleccionada no existe.")
+        if not debt.active:
+            raise ValueError("No se puede pagar una deuda inactiva.")
+        if movimiento.monto > debt.current_balance:
+            raise ValueError(
+                "El pago no puede superar el saldo actual de la deuda."
+            )
+
+        previous_balance = debt.current_balance
+        debt.current_balance -= movimiento.monto
+        debt.updated_at = today_iso()
+        estimated_interest = self.debt_service.calcular_interes_estimado(debt)
+        note = movimiento.descripcion
+
+        payments.append(
+            DebtPayment(
+                movement_id=movimiento.id,
+                debt_id=movimiento.deuda_id or "",
+                account_id=movimiento.cuenta_id,
+                tx_date=movimiento.fecha.isoformat(),
+                amount=movimiento.monto,
+                balance_before=previous_balance,
+                balance_after=debt.current_balance,
+                estimated_interest=estimated_interest,
+                note=note,
+            )
+        )
+        snapshots.append(
+            DebtSnapshot(
+                movement_id=movimiento.id,
+                debt_id=movimiento.deuda_id or "",
+                tx_date=movimiento.fecha.isoformat(),
+                previous_balance=previous_balance,
+                balance=debt.current_balance,
+                source="pago",
+                note=note,
+            )
+        )
+
+    def _guardar_budget_y_trazas(
         self,
         budget,
-        debts: list[Debt],
+        trace: DebtTraceState,
     ) -> None:
-        """Persiste presupuesto y deudas con reversa simple ante fallo."""
+        """Persiste presupuesto, deudas y trazas con reversa simple."""
         original_debts = self.repository.load_debts()
-        self.repository.save_debts(debts)
+        original_payments = self.repository.load_debt_payments()
+        original_snapshots = self.repository.load_debt_snapshots()
+        self.repository.save_debts(trace.debts)
+        self.repository.save_debt_payments(trace.payments)
+        self.repository.save_debt_snapshots(trace.snapshots)
         try:
             self.repository.save(budget)
         except Exception:
             self.repository.save_debts(original_debts)
+            self.repository.save_debt_payments(original_payments)
+            self.repository.save_debt_snapshots(original_snapshots)
             raise
 
     @staticmethod
