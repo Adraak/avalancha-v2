@@ -17,6 +17,7 @@ from avalancha.models import (
     now_iso,
     validate_month,
 )
+from core.models.monthly_closure import MonthlyClosure
 
 
 LEGACY_ACCOUNT_NAME = "Cuenta por clasificar"
@@ -56,6 +57,11 @@ class BudgetRepository:
     def debt_snapshots_path(self) -> Path:
         """Devuelve la ruta del historial de saldos de deuda."""
         return self.data_dir / "debt_snapshots.json"
+
+    @property
+    def monthly_closures_path(self) -> Path:
+        """Devuelve la ruta del estado de cierres mensuales."""
+        return self.data_dir / "monthly_closures.json"
 
     def load(self, year: int, month: int) -> MonthlyBudget:
         """Carga un mes existente o crea uno básico en memoria."""
@@ -247,6 +253,43 @@ class BudgetRepository:
         with path.open("w", encoding="utf-8") as file:
             json.dump(
                 {"accounts": [item.to_dict() for item in accounts]},
+                file,
+                ensure_ascii=False,
+                indent=2,
+                sort_keys=True,
+            )
+            file.write("\n")
+        return path
+
+    def load_monthly_closures(self) -> list[MonthlyClosure]:
+        """Carga estados de cierre mensual del perfil."""
+        path = self.monthly_closures_path
+        if not path.exists():
+            return []
+
+        with path.open("r", encoding="utf-8") as file:
+            data = json.load(file)
+        return [
+            MonthlyClosure.from_dict(item)
+            for item in data.get("monthly_closures", [])
+        ]
+
+    def save_monthly_closures(
+        self,
+        closures: list[MonthlyClosure],
+    ) -> Path:
+        """Guarda estados de cierre mensual con respaldo previo."""
+        path = self.monthly_closures_path
+        if path.exists():
+            shutil.copy2(path, self._backup_path(path))
+
+        with path.open("w", encoding="utf-8") as file:
+            json.dump(
+                {
+                    "monthly_closures": [
+                        item.to_dict() for item in closures
+                    ],
+                },
                 file,
                 ensure_ascii=False,
                 indent=2,

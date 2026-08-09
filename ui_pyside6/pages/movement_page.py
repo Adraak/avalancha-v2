@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
 
 from core.models.movimiento import Movimiento
 from services.movement_service import MovementService
+from services.monthly_closure_service import MonthlyClosureService
 from ui_pyside6.pages.movement_dialog import MovementDialog
 
 
@@ -51,10 +52,17 @@ class MovementsPage(QWidget):
         "Monto",
     ]
 
-    def __init__(self, service: MovementService | None = None) -> None:
+    def __init__(
+        self,
+        service: MovementService | None = None,
+        closure_service: MonthlyClosureService | None = None,
+    ) -> None:
         """Inicializa la pagina funcional de movimientos."""
         super().__init__()
         self.service = service or MovementService()
+        self.closure_service = closure_service or MonthlyClosureService(
+            repository=self.service.repository,
+        )
         self.search_input = QLineEdit()
         self.filter_label = QLabel("")
         self.clear_filter_button = QPushButton("Todos")
@@ -101,8 +109,11 @@ class MovementsPage(QWidget):
         dialog = MovementDialog(self.service, parent=self)
         if dialog.exec() != MovementDialog.DialogCode.Accepted:
             return
+        datos = dialog.obtener_datos()
+        if not self._confirm_closed_month(datos["fecha"]):
+            return
         try:
-            self.service.crear_movimiento(**dialog.obtener_datos())
+            self.service.crear_movimiento(**datos)
         except ValueError as exc:
             self._show_error(str(exc))
             return
@@ -118,10 +129,15 @@ class MovementsPage(QWidget):
         dialog = MovementDialog(self.service, movement, self)
         if dialog.exec() != MovementDialog.DialogCode.Accepted:
             return
+        datos = dialog.obtener_datos()
+        if not self._confirm_closed_month(movement.fecha):
+            return
+        if not self._confirm_closed_month(datos["fecha"]):
+            return
         try:
             self.service.editar_movimiento(
                 movement.id,
-                **dialog.obtener_datos(),
+                **datos,
             )
         except ValueError as exc:
             self._show_error(str(exc))
@@ -134,6 +150,8 @@ class MovementsPage(QWidget):
         movement = self._selected_movement()
         if movement is None:
             self._show_info("Selecciona un movimiento para eliminar.")
+            return
+        if not self._confirm_closed_month(movement.fecha):
             return
         response = QMessageBox.question(
             self,
@@ -319,6 +337,22 @@ class MovementsPage(QWidget):
     def _show_info(self, message: str) -> None:
         """Muestra un mensaje informativo."""
         QMessageBox.information(self, "Movimientos", message)
+
+    def _confirm_closed_month(self, fecha: object) -> bool:
+        """Pide confirmacion si la fecha pertenece a un mes cerrado."""
+        try:
+            warning = self.closure_service.advertencia_modificacion_fecha(fecha)
+        except ValueError as exc:
+            self._show_error(str(exc))
+            return False
+        if not warning:
+            return True
+        response = QMessageBox.question(
+            self,
+            "Mes cerrado",
+            warning + "\n\nQuieres continuar?",
+        )
+        return response == QMessageBox.StandardButton.Yes
 
     def _filtrar_lista(
         self,

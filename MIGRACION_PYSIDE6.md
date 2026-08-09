@@ -1121,3 +1121,55 @@ Riesgos pendientes:
 - La ruta legacy `debt_payment_totals()` debe mantenerse solo para datos
   antiguos hasta que exista una migracion formal de movimientos historicos.
 - No se implemento cierre mensual ni backup en esta etapa.
+
+## Etapa 16 - Cierre mensual y reportes pendientes
+
+Estado: implementada para revision, sin commit de cierre.
+
+Objetivo:
+
+Agregar control operativo mensual para saber si un mes esta abierto, pendiente
+de cierre o cerrado, con checklist minimo antes del cierre.
+
+Implementado:
+
+- Modelo `MonthlyClosure` en `core/models/monthly_closure.py`.
+- Persistencia local por perfil en `monthly_closures.json`.
+- Metodos `load_monthly_closures()` y `save_monthly_closures()` en
+  `BudgetRepository`.
+- Servicio `MonthlyClosureService` con obtencion/creacion, checklist, cierre,
+  reapertura, meses pendientes y advertencia de modificacion sobre mes cerrado.
+- Pagina PySide6 `Cierre mensual` con selector de mes, estado, checklist,
+  cierre, reapertura y aviso de pendientes.
+- Integracion minima con Reportes: al generar un reporte mensual se marca
+  `report_generated=True` para ese mes.
+- Advertencia en Movimientos, Presupuestos y Deudas antes de modificar un mes
+  cerrado.
+
+Estados:
+
+- `abierto`: mes editable normalmente.
+- `pendiente_cierre`: mes anterior disponible que aun no fue cerrado.
+- `cerrado`: mes revisado; las modificaciones muestran advertencia y requieren
+  confirmacion, pero no se bloquean de forma irreversible.
+
+Checklist requerido:
+
+- Movimientos revisados.
+- Cuentas conciliadas.
+- Deudas revisadas.
+- Presupuestos revisados.
+- Reporte generado.
+
+Decisiones tecnicas:
+
+- Cierre por mes calendario.
+- La configuracion avanzada de dia de cierre queda para etapa posterior.
+- La UI no accede a JSON ni al repositorio; consume `MonthlyClosureService`.
+- No se implementan backups, nube, IA, graficos ni bloqueo irreversible.
+
+Riesgos pendientes:
+
+- La advertencia de mes cerrado es una proteccion operativa, no un sistema de
+  permisos.
+- El cierre mensual no genera snapshots historicos avanzados ni backups.

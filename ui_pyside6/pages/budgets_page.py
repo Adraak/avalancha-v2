@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
 
 from core.models.presupuesto import Presupuesto
 from services.budget_service import BudgetService
+from services.monthly_closure_service import MonthlyClosureService
 from ui_pyside6.pages.budget_dialog import BudgetDialog
 
 
@@ -47,10 +48,17 @@ class BudgetsPage(QWidget):
         "Estado",
     ]
 
-    def __init__(self, service: BudgetService | None = None) -> None:
+    def __init__(
+        self,
+        service: BudgetService | None = None,
+        closure_service: MonthlyClosureService | None = None,
+    ) -> None:
         """Inicializa la pantalla funcional de presupuestos."""
         super().__init__()
         self.service = service or BudgetService()
+        self.closure_service = closure_service or MonthlyClosureService(
+            repository=self.service.repository,
+        )
         self.table = QTableWidget()
         self._budgets_by_id: dict[str, Presupuesto] = {}
         self._build_ui()
@@ -58,10 +66,17 @@ class BudgetsPage(QWidget):
 
     def refresh(self) -> None:
         """Actualiza la tabla desde el servicio."""
-        self._populate_table(self.service.calcular_ejecucion_general())
+        try:
+            rows = self.service.calcular_ejecucion_general()
+        except ValueError as exc:
+            self.table.setToolTip(str(exc))
+            rows = []
+        self._populate_table(rows)
 
     def new_budget(self) -> None:
         """Abre dialogo de creacion."""
+        if not self._confirm_closed_month():
+            return
         dialog = BudgetDialog(self.service, parent=self)
         if dialog.exec() != BudgetDialog.DialogCode.Accepted:
             return
@@ -77,6 +92,8 @@ class BudgetsPage(QWidget):
         presupuesto = self._selected_budget()
         if presupuesto is None:
             self._show_info("Selecciona un presupuesto para editar.")
+            return
+        if not self._confirm_closed_month():
             return
         dialog = BudgetDialog(self.service, presupuesto, self)
         if dialog.exec() != BudgetDialog.DialogCode.Accepted:
@@ -96,6 +113,8 @@ class BudgetsPage(QWidget):
         presupuesto = self._selected_budget()
         if presupuesto is None:
             self._show_info("Selecciona un presupuesto para eliminar.")
+            return
+        if not self._confirm_closed_month():
             return
         response = QMessageBox.question(
             self,
@@ -117,6 +136,8 @@ class BudgetsPage(QWidget):
         if presupuesto is None:
             self._show_info("Selecciona un presupuesto para activar.")
             return
+        if not self._confirm_closed_month():
+            return
         try:
             self.service.activar_presupuesto(presupuesto.id)
         except ValueError as exc:
@@ -129,6 +150,8 @@ class BudgetsPage(QWidget):
         presupuesto = self._selected_budget()
         if presupuesto is None:
             self._show_info("Selecciona un presupuesto para desactivar.")
+            return
+        if not self._confirm_closed_month():
             return
         try:
             self.service.desactivar_presupuesto(presupuesto.id)
@@ -268,3 +291,18 @@ class BudgetsPage(QWidget):
     def _show_info(self, message: str) -> None:
         """Muestra mensajes informativos."""
         QMessageBox.information(self, "Presupuestos", message)
+
+    def _confirm_closed_month(self) -> bool:
+        """Pide confirmacion si el periodo de trabajo esta cerrado."""
+        warning = self.closure_service.advertencia_modificacion_mes(
+            self.service.year,
+            self.service.month,
+        )
+        if not warning:
+            return True
+        response = QMessageBox.question(
+            self,
+            "Mes cerrado",
+            warning + "\n\nQuieres continuar?",
+        )
+        return response == QMessageBox.StandardButton.Yes

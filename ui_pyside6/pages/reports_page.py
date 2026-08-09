@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
 )
 
 from services.report_service import ReportService
+from services.monthly_closure_service import MonthlyClosureService
 from ui_pyside6.pages.report_viewer_dialog import ReportViewerDialog
 
 
@@ -44,11 +45,18 @@ class ReportsPage(QWidget):
 
     HEADERS = ["Mes", "Generado", "Archivo", "Estado"]
 
-    def __init__(self, service: ReportService | None = None) -> None:
+    def __init__(
+        self,
+        service: ReportService | None = None,
+        closure_service: MonthlyClosureService | None = None,
+    ) -> None:
         """Inicializa la pagina funcional de reportes."""
         super().__init__()
         today = date.today()
         self.service = service or ReportService()
+        self.closure_service = closure_service or MonthlyClosureService(
+            repository=self.service.repository,
+        )
         self.month_input = QSpinBox()
         self.year_input = QSpinBox()
         self.table = QTableWidget()
@@ -71,6 +79,7 @@ class ReportsPage(QWidget):
                 report,
                 f"R{year:04d}-{month:02d}.avr",
             )
+            self.closure_service.marcar_reporte_generado(year, month, True)
             opened = self.service.abrir_reporte_cifrado(entry["id"])
         except ValueError as exc:
             self._show_error(str(exc))

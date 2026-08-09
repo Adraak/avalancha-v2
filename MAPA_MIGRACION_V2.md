@@ -905,3 +905,34 @@ Riesgos pendientes:
 
 - La coexistencia entre pagos legacy y `pago_deuda` nuevo requiere mantener
   tests de regresion mientras existan datos historicos antiguos.
+
+## Etapa 16 - Cierre mensual y reportes pendientes
+
+Estado: implementada para revision, sin commit de cierre.
+
+| Archivo | Proposito | Contiene logica financiera | Contiene UI | Destino | Prioridad | Observaciones |
+| --- | --- | --- | --- | --- | --- | --- |
+| `core/models/monthly_closure.py` | Modelo puro de estado mensual | Si | No | `core/models/` | Alta | Define estados, checklist, cierre, reapertura y serializacion. |
+| `avalancha/storage.py` | Persistencia JSON por perfil | No | No | `legacy/storage` | Alta | Agrega `monthly_closures.json` dentro del `data_dir` activo. |
+| `services/monthly_closure_service.py` | Orquestacion de cierre mensual | Si | No | `services/` | Alta | Administra checklist, pendientes, cierre, reapertura y advertencias. |
+| `ui_pyside6/pages/monthly_closure_page.py` | Pantalla operativa de cierre | No | Si | `ui_pyside6/` | Alta | Consume solo el servicio; no accede a JSON ni storage. |
+| `ui_pyside6/pages/movement_page.py` | CRUD de movimientos | No | Si | `ui_pyside6/` | Alta | Advierte antes de modificar movimientos en meses cerrados. |
+| `ui_pyside6/pages/budgets_page.py` | CRUD de presupuestos | No | Si | `ui_pyside6/` | Alta | Advierte antes de modificar presupuestos en meses cerrados. |
+| `ui_pyside6/pages/debts_page.py` | CRUD de deudas | No | Si | `ui_pyside6/` | Alta | Advierte antes de modificar deudas en el periodo activo cerrado. |
+| `ui_pyside6/pages/reports_page.py` | Reportes mensuales | No | Si | `ui_pyside6/` | Media | Marca reporte generado en el checklist del mes. |
+| `tests/test_v2_monthly_closure_service.py` | Cobertura de cierre mensual | No | No | `tests/` | Alta | Valida creacion, checklist, cierre, reapertura, pendientes, aislamiento y advertencia. |
+
+Reglas:
+
+- Un mes solo puede cerrarse con checklist completo.
+- Un mes cerrado no se bloquea de forma absoluta; la UI advierte y permite
+  continuar si el usuario confirma.
+- Los cierres viven en el `data_dir` del perfil activo y no se mezclan entre
+  Personal y Demo.
+- El ciclo usa mes calendario; dia de cierre configurable queda fuera de esta
+  etapa.
+
+Riesgos pendientes:
+
+- No existe aun cierre automatico ni recordatorio configurable.
+- No se generan backups ni snapshots historicos avanzados desde el cierre.

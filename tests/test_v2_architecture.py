@@ -27,6 +27,7 @@ class V2ArchitectureTest(unittest.TestCase):
             from core.models.conciliacion import Conciliacion
             from core.models.configuracion import ConfiguracionAplicacion
             from core.models.deuda import Deuda
+            from core.models.monthly_closure import MonthlyClosure
             from core.models.movimiento import Movimiento
             from core.models.perfil_financiero import PerfilFinanciero
             from core.models.presupuesto import Presupuesto
@@ -41,6 +42,7 @@ class V2ArchitectureTest(unittest.TestCase):
             from services.financial_alert_service import FinancialAlertService
             from services.financial_summary_service import FinancialSummaryService
             from services.movement_service import MovementService
+            from services.monthly_closure_service import MonthlyClosureService
             from services.profile_service import ProfileService
             from services.reconciliation_service import ReconciliationService
             from services.report_service import ReportService
@@ -85,6 +87,7 @@ class V2ArchitectureTest(unittest.TestCase):
             )
             Presupuesto(id="presupuesto-1", mes="2026-06")
             ResumenMensual(mes="2026-06")
+            MonthlyClosure(year=2026, month=6)
             ConfiguracionAplicacion(
                 carpeta_reportes=Path("reportes"),
                 carpeta_respaldo=Path("backup"),
@@ -98,6 +101,7 @@ class V2ArchitectureTest(unittest.TestCase):
             FinancialAlertService()
             FinancialSummaryService()
             MovementService()
+            MonthlyClosureService(data_dir=root / "data")
             ReconciliationService()
             profile_service = ProfileService(
                 profiles_root=root / "perfiles",
@@ -165,6 +169,17 @@ class V2ArchitectureTest(unittest.TestCase):
         ).read_text(encoding="utf-8")
 
         self.assertIn("ui_pyside6.color_system", dashboard)
+
+    def test_monthly_closure_ui_no_importa_storage_directo(self) -> None:
+        """Evita que Cierre mensual acceda directo a almacenamiento."""
+        project_root = Path(__file__).resolve().parents[1]
+        closure_page = (
+            project_root / "ui_pyside6" / "pages" / "monthly_closure_page.py"
+        ).read_text(encoding="utf-8")
+
+        self.assertNotIn("BudgetRepository", closure_page)
+        self.assertNotIn("avalancha.storage", closure_page)
+        self.assertNotIn("json.", closure_page)
 
     def test_categories_ui_no_importa_storage_directo(self) -> None:
         """Evita que Categorias acceda directo a almacenamiento."""

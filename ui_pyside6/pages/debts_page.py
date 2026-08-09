@@ -25,6 +25,7 @@ from services.debt_analytics_service import (
     ResumenTemporalDeuda,
 )
 from services.debt_service import DebtService
+from services.monthly_closure_service import MonthlyClosureService
 from ui_pyside6.color_system import get_debt_status_color
 from ui_pyside6.pages.debt_dialog import DebtDialog
 
@@ -58,10 +59,21 @@ class DebtsPage(QWidget):
         "Estado",
     ]
 
-    def __init__(self, service: DebtService | None = None) -> None:
+    def __init__(
+        self,
+        service: DebtService | None = None,
+        closure_service: MonthlyClosureService | None = None,
+        year: int | None = None,
+        month: int | None = None,
+    ) -> None:
         """Inicializa la pagina de deudas."""
         super().__init__()
         self.service = service or DebtService()
+        self.closure_service = closure_service or MonthlyClosureService(
+            repository=self.service.repository,
+        )
+        self.year = year
+        self.month = month
         self.analytics_service = DebtAnalyticsService(
             repository=self.service.repository,
             debt_service=self.service,
@@ -88,6 +100,8 @@ class DebtsPage(QWidget):
 
     def new_debt(self) -> None:
         """Abre dialogo para crear deuda."""
+        if not self._confirm_closed_month():
+            return
         dialog = DebtDialog(self.service, parent=self)
         if dialog.exec() != DebtDialog.DialogCode.Accepted:
             return
@@ -104,6 +118,8 @@ class DebtsPage(QWidget):
         if debt is None:
             self._show_info("Selecciona una deuda para editar.")
             return
+        if not self._confirm_closed_month():
+            return
         dialog = DebtDialog(self.service, debt, self)
         if dialog.exec() != DebtDialog.DialogCode.Accepted:
             return
@@ -119,6 +135,8 @@ class DebtsPage(QWidget):
         debt = self._selected_debt()
         if debt is None:
             self._show_info("Selecciona una deuda para eliminar.")
+            return
+        if not self._confirm_closed_month():
             return
         response = QMessageBox.question(
             self,
@@ -375,6 +393,8 @@ class DebtsPage(QWidget):
         if debt is None:
             self._show_info("Selecciona una deuda.")
             return
+        if not self._confirm_closed_month():
+            return
         try:
             if active:
                 self.service.activar_deuda(debt.debt_id)
@@ -414,3 +434,20 @@ class DebtsPage(QWidget):
     def _show_info(self, message: str) -> None:
         """Muestra mensajes informativos."""
         QMessageBox.information(self, "Deudas", message)
+
+    def _confirm_closed_month(self) -> bool:
+        """Pide confirmacion si el periodo activo esta cerrado."""
+        if self.year is None or self.month is None:
+            return True
+        warning = self.closure_service.advertencia_modificacion_mes(
+            self.year,
+            self.month,
+        )
+        if not warning:
+            return True
+        response = QMessageBox.question(
+            self,
+            "Mes cerrado",
+            warning + "\n\nQuieres continuar?",
+        )
+        return response == QMessageBox.StandardButton.Yes

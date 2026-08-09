@@ -23,6 +23,7 @@ from services.category_service import CategoryService
 from services.demo_profile_service import DemoProfileService
 from services.debt_service import DebtService
 from services.movement_service import MovementService
+from services.monthly_closure_service import MonthlyClosureService
 from services.profile_service import PERFIL_DEMO, ProfileService
 from services.reconciliation_service import ReconciliationService
 from services.report_service import ReportService
@@ -32,6 +33,7 @@ from ui_pyside6.pages.budgets_page import BudgetsPage
 from ui_pyside6.pages.categories_page import CategoriesPage
 from ui_pyside6.pages.dashboard_page import DashboardPage
 from ui_pyside6.pages.debts_page import DebtsPage
+from ui_pyside6.pages.monthly_closure_page import MonthlyClosurePage
 from ui_pyside6.pages.movements_page import MovementsPage
 from ui_pyside6.pages.profiles_page import ProfilesPage
 from ui_pyside6.pages.reconciliation_page import ReconciliationPage
@@ -254,6 +256,7 @@ class MainWindow(QMainWindow):
             month=month,
         )
         debt_service = DebtService(data_dir=data_dir)
+        monthly_closure_service = MonthlyClosureService(data_dir=data_dir)
         reconciliation_service = ReconciliationService(
             data_dir=data_dir,
             year=year,
@@ -270,7 +273,10 @@ class MainWindow(QMainWindow):
             reports_dir=settings.carpeta_reportes,
             key_path=profile.key_path,
         )
-        movements_page = MovementsPage(movement_service)
+        movements_page = MovementsPage(
+            movement_service,
+            closure_service=monthly_closure_service,
+        )
         accounts_page = AccountsPage(account_service)
         accounts_page.movements_requested.connect(
             self._open_account_movements,
@@ -290,10 +296,34 @@ class MainWindow(QMainWindow):
             ),
             NavigationItem("Movimientos", movements_page),
             NavigationItem("Cuentas", accounts_page),
-            NavigationItem("Presupuestos", BudgetsPage(budget_service)),
+            NavigationItem(
+                "Presupuestos",
+                BudgetsPage(
+                    budget_service,
+                    closure_service=monthly_closure_service,
+                ),
+            ),
             NavigationItem("Categorías", CategoriesPage(category_service)),
-            NavigationItem("Deudas", DebtsPage(debt_service)),
-            NavigationItem("Reportes", ReportsPage(report_service)),
+            NavigationItem(
+                "Deudas",
+                DebtsPage(
+                    debt_service,
+                    closure_service=monthly_closure_service,
+                    year=year,
+                    month=month,
+                ),
+            ),
+            NavigationItem(
+                "Reportes",
+                ReportsPage(
+                    report_service,
+                    closure_service=monthly_closure_service,
+                ),
+            ),
+            NavigationItem(
+                "Cierre mensual",
+                MonthlyClosurePage(monthly_closure_service, year, month),
+            ),
             NavigationItem(
                 "Conciliacion",
                 ReconciliationPage(reconciliation_service),

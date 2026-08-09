@@ -11,6 +11,7 @@ from services.debt_service import DebtService
 from services.financial_alert_service import FinancialAlertService
 from services.financial_summary_service import FinancialSummaryService
 from services.movement_service import MovementService
+from services.monthly_closure_service import MonthlyClosureService
 from services.profile_service import ProfileService
 from services.reconciliation_service import ReconciliationService
 from services.report_service import ReportService
@@ -28,6 +29,7 @@ __all__ = [
     "FinancialAlertService",
     "FinancialSummaryService",
     "MovementService",
+    "MonthlyClosureService",
     "ProfileService",
     "ReconciliationService",
     "ReportService",
