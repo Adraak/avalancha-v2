@@ -70,6 +70,43 @@ class SettingsServiceTest(unittest.TestCase):
         self.assertTrue(reports.is_dir())
         self.assertTrue(backup.is_dir())
 
+    def test_configuraciones_en_directorios_distintos_no_se_mezclan(self) -> None:
+        """Verifica el aislamiento total entre dos instancias con rutas diferentes."""
+        dir1 = self.root / "service1"
+        dir2 = self.root / "service2"
+        for d in [dir1, dir2]:
+            (d / "config").mkdir(parents=True, exist_ok=True)
+            (d / "reportes").mkdir(parents=True, exist_ok=True)
+            (d / "backup").mkdir(parents=True, exist_ok=True)
+
+        s1 = SettingsService(dir1/"config", dir1/"reportes", dir1/"backup")
+        s2 = SettingsService(dir2/"config", dir2/"reportes", dir2/"pathname_error_placeholder") # logic error in placeholder but let's use real paths
+        # Let's refine the addresses to be safer
+        s2 = SettingsService(dir2/"config", dir2/"reportes", dir2/"backup")
+
+        s1.guardar_configuracion({
+            "carpeta_reportes": dir1 / "rep",
+            "moneda_principal": "CLP",
+            "apariencia": "claro",
+            "carpeta_respaldo": dir1 / "bak"
+        })
+        s2.guardar_configuracion({
+            "carpeta_reportes": dir2 / "rep",
+            "moneda_principal": "USD",
+            "apariencia": "oscuro",
+            "carpeta_respaldo": dir2 / "bak"
+        })
+
+        c1 = s1.cargar_configuracion()
+        c2 = s2.cargar_configuracion()
+
+        self.assertEqual(c1.moneda_principal, "CLP")
+        self.assertEqual(c2.moneda_principal, "USD")
+        self.assertEqual(c1.apariencia, "claro")
+        self.assertEqual(c2.apariencia, "oscuro")
+        self.assertNotEqual(c1.carpeta_reportes, c2.carpeta_reportes)
+
+
     def test_report_service_usa_carpeta_configurada(self) -> None:
         """Genera reporte cifrado en la carpeta configurada."""
         reports = self.root / "reportes_configurados"
