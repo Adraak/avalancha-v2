@@ -235,6 +235,20 @@ class SettingsServiceTest(unittest.TestCase):
                 },
             )
 
+    def test_validar_carpeta_respaldo_no_puede_ser_archivo(self) -> None:
+        """Verifica que se lanza error si la carpeta de respaldo es un archivo."""
+        archivo_invalido = self.root / "backup_invalido.txt"
+        archivo_invalido.write_text("contenido", encoding="utf-8")
+
+        with self.assertRaisesRegex(ValueError, "La carpeta de respaldo no es valida"):
+            self.service.guardar_configuracion({
+                "carpeta_reportes": self.root / "rep",
+                "moneda_principal": "CLP",
+                "apariencia": "claro",
+                "carpeta_respaldo": archivo_invalido,
+            })
+
+
 
     def _crear_repositorio_con_datos(self) -> BudgetRepository:
         """Crea un repositorio minimo para generar reportes."""
