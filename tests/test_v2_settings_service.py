@@ -220,9 +220,21 @@ class SettingsServiceTest(unittest.TestCase):
         page = Path("ui_pyside6/pages/settings_page.py").read_text(
             encoding="utf-8",
         )
-
         self.assertNotIn("BudgetRepository", page)
         self.assertNotIn("avalancha.storage", page)
+
+    def test_validar_apariencia_no_soportada(self) -> None:
+        """Verifica que se lanza error ante apariencia no soportada."""
+        with self.assertRaisesRegex(ValueError, "apariencia.*no esta soportada"):
+            self.service.guardar_configuracion(
+                {
+                    "carpeta_reportes": self.root / "rep",
+                    "moneda_principal": "CLP",
+                    "apariencia": "neon",
+                    "carpeta_respaldo": self.root / "bak",
+                },
+            )
+
 
     def _crear_repositorio_con_datos(self) -> BudgetRepository:
         """Crea un repositorio minimo para generar reportes."""
