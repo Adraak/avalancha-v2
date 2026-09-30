@@ -48,7 +48,7 @@ class SettingsPage(QWidget):
         """Solicita al servicio validar y guardar configuracion."""
         try:
             config = self.service.guardar_configuracion(self._collect_data())
-        except ValueError as exc:
+        except (ValueError, OSError, RuntimeError) as exc:
             self._show_error(str(exc))
             return
         self._load_config(config)
@@ -63,7 +63,11 @@ class SettingsPage(QWidget):
         )
         if response != QMessageBox.StandardButton.Yes:
             return
-        config = self.service.restaurar_valores_por_defecto()
+        try:
+            config = self.service.restaurar_valores_por_defecto()
+        except (ValueError, OSError, RuntimeError) as exc:
+            self._show_error(str(exc))
+            return
         self._load_config(config)
         self.estado_label.setText("Valores por defecto restaurados.")
 
@@ -184,4 +188,5 @@ class SettingsPage(QWidget):
 
     def _show_error(self, message: str) -> None:
         """Muestra errores de validacion generados por el servicio."""
+        self.estado_label.setText(f"Error: {message}")
         QMessageBox.warning(self, "Configuración", message)
