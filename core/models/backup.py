@@ -48,6 +48,18 @@ class UnsafeBackupPathError(InvalidBackupManifestError):
     """Indica que una ruta del respaldo no es relativa y segura."""
 
 
+class BackupWriteError(BackupError):
+    """Indica que no fue posible escribir el respaldo de forma segura."""
+
+
+class BackupValidationError(BackupError):
+    """Indica que el respaldo generado no superó la validación post-creación."""
+
+
+class BackupAlreadyExistsError(BackupError):
+    """Indica que ya existe un respaldo publicado con el mismo nombre."""
+
+
 @dataclass(frozen=True, slots=True)
 class BackupFileEntry:
     """Describe un archivo incluido en un respaldo por perfil."""
