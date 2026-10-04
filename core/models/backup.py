@@ -60,6 +60,10 @@ class BackupAlreadyExistsError(BackupError):
     """Indica que ya existe un respaldo publicado con el mismo nombre."""
 
 
+class ProfileMismatchError(BackupValidationError):
+    """Indica que el respaldo no corresponde al perfil esperado."""
+
+
 @dataclass(frozen=True, slots=True)
 class BackupFileEntry:
     """Describe un archivo incluido en un respaldo por perfil."""

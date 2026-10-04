@@ -19,7 +19,11 @@ from core.models.backup import (
     UnsafeBackupPathError,
 )
 from services.backup_manifest_service import BackupManifestService
-from services.backup_service import MANIFEST_ENTRY_NAME, ProfileBackupService
+from services.backup_service import (
+    MANIFEST_ENTRY_NAME,
+    BackupValidator,
+    ProfileBackupService,
+)
 from services.profile_service import PerfilAplicacion
 from services.settings_service import SettingsService
 
@@ -330,10 +334,12 @@ class TestManifestYValidacion:
                 MANIFEST_ENTRY_NAME,
                 BackupManifestService().to_json(manifest),
             )
-        service = ProfileBackupService()
+        validator = BackupValidator()
 
-        with pytest.raises(BackupValidationError):
-            service._validar_zip(zip_path, manifest, "personal")
+        resultado = validator.validar_backup(zip_path, expected_profile_id="personal")
+
+        assert resultado.valid is False
+        assert isinstance(resultado.error, BackupValidationError)
 
     def test_archivo_extra_detectado(self, tmp_path: Path) -> None:
         """La validación detecta un archivo adicional no declarado."""
@@ -346,10 +352,12 @@ class TestManifestYValidacion:
                 MANIFEST_ENTRY_NAME,
                 BackupManifestService().to_json(manifest),
             )
-        service = ProfileBackupService()
+        validator = BackupValidator()
 
-        with pytest.raises(BackupValidationError):
-            service._validar_zip(zip_path, manifest, "personal")
+        resultado = validator.validar_backup(zip_path, expected_profile_id="personal")
+
+        assert resultado.valid is False
+        assert isinstance(resultado.error, BackupValidationError)
 
     def test_archivo_faltante_detectado(self, tmp_path: Path) -> None:
         """La validación detecta que falta un archivo declarado en el manifest."""
@@ -360,20 +368,23 @@ class TestManifestYValidacion:
                 MANIFEST_ENTRY_NAME,
                 BackupManifestService().to_json(manifest),
             )
-        service = ProfileBackupService()
+        validator = BackupValidator()
 
-        with pytest.raises(BackupValidationError):
-            service._validar_zip(zip_path, manifest, "personal")
+        resultado = validator.validar_backup(zip_path, expected_profile_id="personal")
+
+        assert resultado.valid is False
+        assert isinstance(resultado.error, BackupValidationError)
 
     def test_zip_corrupto_detectado(self, tmp_path: Path) -> None:
         """La validación detecta que el archivo no es un ZIP válido."""
         zip_path = tmp_path / "no_es_zip.zip"
         zip_path.write_bytes(b"esto no es un zip")
-        manifest = _build_manual_manifest()
-        service = ProfileBackupService()
+        validator = BackupValidator()
 
-        with pytest.raises(BackupValidationError):
-            service._validar_zip(zip_path, manifest, "personal")
+        resultado = validator.validar_backup(zip_path, expected_profile_id="personal")
+
+        assert resultado.valid is False
+        assert isinstance(resultado.error, BackupValidationError)
 
 
 class TestPublicacionYFallos:

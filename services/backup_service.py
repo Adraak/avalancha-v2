@@ -13,11 +13,13 @@ from pathlib import Path
 
 from core.models.backup import (
     BackupAlreadyExistsError,
+    BackupError,
     BackupFileEntry,
     BackupKeyPolicy,
     BackupManifest,
     BackupValidationError,
     BackupWriteError,
+    ProfileMismatchError,
     UnsafeBackupPathError,
     normalize_backup_path,
 )
@@ -31,6 +33,19 @@ _DPAPI_PREFIX = b"AVALANCHA-DPAPI-1\n"
 _CHUNK_SIZE = 1024 * 1024
 _SAFE_NAME_PATTERN = re.compile(r"[^A-Za-z0-9_-]+")
 
+# Límites defensivos mínimos contra ZIPs adversariales (zip-bomb). Calibrados
+# con amplio margen para los backups reales de Avalancha (JSON financiero y
+# reportes cifrados, del orden de KB-MB), nunca para restringir backups
+# legítimos.
+MAX_BACKUP_ENTRIES = 5000
+MAX_SINGLE_FILE_SIZE = 200 * 1024 * 1024
+MAX_TOTAL_UNCOMPRESSED_SIZE = 500 * 1024 * 1024
+
+# Máscara/valor de S_IFLNK para detectar, de forma best-effort, entradas ZIP
+# marcadas como symlink Unix vía ZipInfo.external_attr (bits altos = st_mode).
+_UNIX_MODE_MASK = 0o170000
+_UNIX_SYMLINK_MODE = 0o120000
+
 
 @dataclass(frozen=True, slots=True)
 class BackupCreationResult:
@@ -38,6 +53,199 @@ class BackupCreationResult:
 
     zip_path: Path
     manifest: BackupManifest
+
+
+@dataclass(frozen=True, slots=True)
+class BackupValidationResult:
+    """Resultado tipado y de solo lectura de validar un respaldo existente."""
+
+    valid: bool
+    zip_path: Path
+    profile_id: str | None = None
+    file_count: int | None = None
+    schema_version: int | None = None
+    error: BackupError | None = None
+
+
+class BackupValidator:
+    """Valida, sin efectos secundarios, un respaldo ZIP ya existente.
+
+    No extrae, no restaura ni modifica el ZIP ni el perfil: solo lee y
+    verifica. Es la única implementación de validación; ProfileBackupService
+    la reutiliza para su propia verificación post-creación en vez de
+    duplicar la lógica.
+    """
+
+    def __init__(
+        self,
+        manifest_service: BackupManifestService | None = None,
+    ) -> None:
+        """Inicializa el validador con su colaborador de manifest."""
+        self._manifest_service = manifest_service or BackupManifestService()
+
+    def validar_backup(
+        self,
+        zip_path: Path,
+        *,
+        expected_profile_id: str | None = None,
+    ) -> BackupValidationResult:
+        """Valida de forma íntegra y read-only un respaldo ZIP existente."""
+        try:
+            manifest = self._validar_desde_cero(
+                zip_path,
+                expected_profile_id=expected_profile_id,
+            )
+        except BackupError as exc:
+            return BackupValidationResult(
+                valid=False,
+                zip_path=zip_path,
+                error=exc,
+            )
+        return BackupValidationResult(
+            valid=True,
+            zip_path=zip_path,
+            profile_id=manifest.profile_id,
+            file_count=len(manifest.files),
+            schema_version=manifest.schema_version,
+        )
+
+    def _validar_desde_cero(
+        self,
+        zip_path: Path,
+        *,
+        expected_profile_id: str | None,
+    ) -> BackupManifest:
+        """Reconstruye y verifica el manifest únicamente desde bytes del ZIP.
+
+        Todo chequeo de metadatos (conteo de entradas, tamaños declarados,
+        duplicados, directorios, symlinks) ocurre antes de descomprimir nada,
+        para no darle a un ZIP adversarial la oportunidad de agotar memoria
+        antes de ser rechazado.
+        """
+        try:
+            with zipfile.ZipFile(zip_path, "r") as archive:
+                infolist = archive.infolist()
+                if len(infolist) > MAX_BACKUP_ENTRIES:
+                    raise BackupValidationError(
+                        "El respaldo tiene más entradas de las permitidas.",
+                    )
+
+                total_declared_size = 0
+                for info in infolist:
+                    if info.file_size > MAX_SINGLE_FILE_SIZE:
+                        raise BackupValidationError(
+                            f"La entrada {info.filename} excede el tamaño"
+                            " permitido para un respaldo.",
+                        )
+                    total_declared_size += info.file_size
+                if total_declared_size > MAX_TOTAL_UNCOMPRESSED_SIZE:
+                    raise BackupValidationError(
+                        "El respaldo excede el tamaño total descomprimido"
+                        " permitido.",
+                    )
+
+                names = archive.namelist()
+                if len(names) != len(set(names)):
+                    raise BackupValidationError(
+                        "El respaldo contiene entradas ZIP duplicadas.",
+                    )
+                if any(name.endswith("/") for name in names):
+                    raise BackupValidationError(
+                        "El respaldo contiene entradas de directorio no"
+                        " permitidas.",
+                    )
+                for info in infolist:
+                    if self._es_entrada_symlink(info):
+                        raise BackupValidationError(
+                            "El respaldo contiene un enlace simbólico no"
+                            " permitido.",
+                        )
+
+                if MANIFEST_ENTRY_NAME not in names:
+                    raise BackupValidationError(
+                        "El respaldo no contiene manifest.json.",
+                    )
+                manifest_bytes = self._leer_acotado(
+                    archive,
+                    MANIFEST_ENTRY_NAME,
+                )
+                try:
+                    manifest_text = manifest_bytes.decode("utf-8")
+                except UnicodeDecodeError as exc:
+                    raise BackupValidationError(
+                        "El manifest.json del respaldo no es texto válido.",
+                    ) from exc
+                persisted = self._manifest_service.from_json(manifest_text)
+
+                if (
+                    expected_profile_id is not None
+                    and persisted.profile_id != expected_profile_id
+                ):
+                    raise ProfileMismatchError(
+                        "El respaldo no corresponde al perfil esperado.",
+                    )
+
+                expected_names = {entry.path for entry in persisted.files}
+                expected_names.add(MANIFEST_ENTRY_NAME)
+                if set(names) != expected_names:
+                    raise BackupValidationError(
+                        "El contenido del respaldo no coincide con el"
+                        " manifest.",
+                    )
+
+                for entry in persisted.files:
+                    info = archive.getinfo(entry.path)
+                    if info.file_size != entry.size:
+                        raise BackupValidationError(
+                            f"El tamaño de {entry.path} no coincide con el"
+                            " manifest.",
+                        )
+                    data = self._leer_acotado(archive, entry.path)
+                    if len(data) != entry.size:
+                        raise BackupValidationError(
+                            f"El tamaño de {entry.path} no coincide con el"
+                            " manifest.",
+                        )
+                    digest = hashlib.sha256(data).hexdigest()
+                    if digest != entry.sha256:
+                        raise BackupValidationError(
+                            f"El hash de {entry.path} no coincide con el"
+                            " manifest.",
+                        )
+        except zipfile.BadZipFile as exc:
+            raise BackupValidationError("El respaldo ZIP está corrupto.") from exc
+        return persisted
+
+    @staticmethod
+    def _leer_acotado(archive: zipfile.ZipFile, name: str) -> bytes:
+        """Lee una entrada descomprimiendo en streaming con tope real.
+
+        A diferencia de comparar contra el tamaño declarado en la cabecera
+        (que un ZIP adversarial puede falsear), este tope se aplica sobre los
+        bytes efectivamente producidos por la descompresión, deteniéndola en
+        cuanto se supera el límite.
+        """
+        chunks: list[bytes] = []
+        total = 0
+        with archive.open(name) as handle:
+            while True:
+                chunk = handle.read(_CHUNK_SIZE)
+                if not chunk:
+                    break
+                total += len(chunk)
+                if total > MAX_SINGLE_FILE_SIZE:
+                    raise BackupValidationError(
+                        f"La entrada {name} excede el tamaño descomprimido"
+                        " permitido para un respaldo.",
+                    )
+                chunks.append(chunk)
+        return b"".join(chunks)
+
+    @staticmethod
+    def _es_entrada_symlink(info: zipfile.ZipInfo) -> bool:
+        """Detecta, de forma best-effort, entradas marcadas como symlink Unix."""
+        unix_mode = info.external_attr >> 16
+        return (unix_mode & _UNIX_MODE_MASK) == _UNIX_SYMLINK_MODE
 
 
 class ProfileBackupService:
@@ -49,6 +257,7 @@ class ProfileBackupService:
     ) -> None:
         """Inicializa el servicio con su colaborador de manifest."""
         self._manifest_service = manifest_service or BackupManifestService()
+        self._validator = BackupValidator(self._manifest_service)
 
     def crear_backup(
         self,
@@ -98,7 +307,12 @@ class ProfileBackupService:
                 profile=profile,
                 key_policy=key_policy,
             )
-            self._validar_zip(tmp_path, manifest, profile.id)
+            resultado = self._validator.validar_backup(
+                tmp_path,
+                expected_profile_id=profile.id,
+            )
+            if not resultado.valid:
+                raise resultado.error
             if final_path.exists():
                 raise BackupAlreadyExistsError(
                     f"Ya existe un respaldo publicado en {final_path}.",
@@ -338,62 +552,3 @@ class ProfileBackupService:
                 " respaldo.",
             )
         return size, digest.hexdigest()
-
-    def _validar_zip(
-        self,
-        zip_path: Path,
-        manifest: BackupManifest,
-        profile_id: str,
-    ) -> None:
-        """Reabre y valida íntegramente el ZIP antes de publicarlo."""
-        try:
-            with zipfile.ZipFile(zip_path, "r") as archive:
-                bad_file = archive.testzip()
-                if bad_file is not None:
-                    raise BackupValidationError(
-                        f"El respaldo ZIP está corrupto en {bad_file}.",
-                    )
-                names = archive.namelist()
-                if MANIFEST_ENTRY_NAME not in names:
-                    raise BackupValidationError(
-                        "El respaldo no contiene manifest.json.",
-                    )
-                manifest_bytes = archive.read(MANIFEST_ENTRY_NAME)
-                try:
-                    manifest_text = manifest_bytes.decode("utf-8")
-                except UnicodeDecodeError as exc:
-                    raise BackupValidationError(
-                        "El manifest.json del respaldo no es texto válido.",
-                    ) from exc
-                persisted = self._manifest_service.from_json(manifest_text)
-                if persisted.to_dict() != manifest.to_dict():
-                    raise BackupValidationError(
-                        "El manifest publicado no coincide con el manifest"
-                        " generado.",
-                    )
-                if persisted.profile_id != profile_id:
-                    raise BackupValidationError(
-                        "El respaldo no corresponde al perfil solicitado.",
-                    )
-                expected_names = {entry.path for entry in persisted.files}
-                expected_names.add(MANIFEST_ENTRY_NAME)
-                if set(names) != expected_names:
-                    raise BackupValidationError(
-                        "El contenido del respaldo no coincide con el"
-                        " manifest.",
-                    )
-                for entry in persisted.files:
-                    data = archive.read(entry.path)
-                    if len(data) != entry.size:
-                        raise BackupValidationError(
-                            f"El tamaño de {entry.path} no coincide con el"
-                            " manifest.",
-                        )
-                    digest = hashlib.sha256(data).hexdigest()
-                    if digest != entry.sha256:
-                        raise BackupValidationError(
-                            f"El hash de {entry.path} no coincide con el"
-                            " manifest.",
-                        )
-        except zipfile.BadZipFile as exc:
-            raise BackupValidationError("El respaldo ZIP está corrupto.") from exc
