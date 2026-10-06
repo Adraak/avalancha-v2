@@ -64,6 +64,26 @@ class ProfileMismatchError(BackupValidationError):
     """Indica que el respaldo no corresponde al perfil esperado."""
 
 
+class RestorePreparationError(BackupError):
+    """Indica que la preparación de una restauración no puede continuar."""
+
+
+class CryptoKeyIncompatibleError(BackupError):
+    """Indica que reporte.key del backup no es utilizable en este equipo."""
+
+
+class RestoreApplyError(BackupError):
+    """Indica que un efecto de restauración falló durante su aplicación."""
+
+
+class RestoreVerificationError(BackupError):
+    """Indica que el estado posterior a un efecto no es el esperado."""
+
+
+class RestoreRollbackError(BackupError):
+    """Indica que el rollback de una restauración no pudo completarse."""
+
+
 @dataclass(frozen=True, slots=True)
 class BackupFileEntry:
     """Describe un archivo incluido en un respaldo por perfil."""
