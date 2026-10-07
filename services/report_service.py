@@ -17,6 +17,7 @@ from avalancha.reporte_mensual import ReporteEstructurado, SeccionReporte
 from avalancha.storage import BudgetRepository
 
 from core.models.resumen_mensual import ResumenMensual
+from services.error_reporting_service import UserFacingError
 from services.account_service import AccountService
 from services.budget_service import BudgetService
 from services.financial_summary_service import FinancialSummaryService
@@ -172,12 +173,14 @@ class ReportService:
             else self._obtener_mes_desde_estructura(estructura)
         )
         if not estructura.encabezado and not estructura.secciones:
-            raise ValueError("No se puede guardar un reporte vacio.")
+            raise UserFacingError("No se puede guardar un reporte vacio.")
         self._validar_nombre_archivo(nombre_archivo, mes)
         try:
             return self.gestor_reportes.guardar_reporte(estructura, mes)
         except ReporteDuplicadoError as exc:
-            raise ValueError(str(exc)) from exc
+            raise UserFacingError(
+                "Este mes ya posee un reporte oficial.",
+            ) from exc
 
     def abrir_reporte_cifrado(
         self,
@@ -212,7 +215,7 @@ class ReportService:
     def eliminar_reporte(self, reporte_id: str) -> None:
         """Elimina un reporte cifrado autorizado desde la interfaz."""
         if not reporte_id:
-            raise ValueError("Debe seleccionar un reporte.")
+            raise UserFacingError("Debe seleccionar un reporte.")
         self.gestor_reportes.eliminar_reporte(reporte_id)
 
     def obtener_ruta_reportes(self) -> Path:
@@ -647,7 +650,7 @@ class ReportService:
         try:
             validate_month(int(anio), int(mes))
         except (TypeError, ValueError) as exc:
-            raise ValueError("El mes o anio no es valido.") from exc
+            raise UserFacingError("El mes o anio no es valido.") from exc
 
     @staticmethod
     def _validar_nombre_archivo(
@@ -660,7 +663,7 @@ class ReportService:
         nombre = Path(nombre_archivo).name
         esperado = f"R{mes}.avr"
         if nombre != esperado:
-            raise ValueError(
+            raise UserFacingError(
                 f"El nombre del reporte debe ser {esperado}.",
             )
 
@@ -682,7 +685,7 @@ class ReportService:
                     numero = meses.get(mes_nombre)
                     if numero:
                         return f"{int(partes[-1]):04d}-{numero:02d}"
-        raise ValueError("No se pudo determinar el mes del reporte.")
+        raise UserFacingError("No se pudo determinar el mes del reporte.")
 
     def _resolver_reporte_id(self, ruta: str | Path) -> str:
         """Resuelve un identificador desde ID, nombre o ruta."""
@@ -695,4 +698,4 @@ class ReportService:
                 return str(item["id"])
             if Path(valor) == self.obtener_ruta_reportes() / str(item["ruta"]):
                 return str(item["id"])
-        raise ValueError("No se encontro el reporte seleccionado.")
+        raise UserFacingError("No se encontro el reporte seleccionado.")

@@ -17,10 +17,11 @@ from PySide6.QtWidgets import (
 
 from services.demo_profile_service import DemoProfileService
 from services.profile_service import PERFIL_DEMO, PERFIL_PERSONAL, ProfileService
+from ui_pyside6.pages.base_page import ErrorAwarePage
 from ui_pyside6.pages.profile_dialog import ProfileDialog
 
 
-class ProfilesPage(QWidget):
+class ProfilesPage(ErrorAwarePage):
     """Administra seleccion basica de perfiles locales."""
 
     profile_changed = Signal()
@@ -70,7 +71,13 @@ class ProfilesPage(QWidget):
         try:
             self.profile_service.seleccionar_perfil(profile_id)
         except ValueError as exc:
-            self._show_error(str(exc))
+            self._show_error(
+                self._value_error_message(
+                    exc,
+                    context="profiles.open_selected",
+                    fallback="No fue posible abrir el perfil.",
+                ),
+            )
             return
         self.profile_changed.emit()
 
@@ -79,7 +86,13 @@ class ProfilesPage(QWidget):
         try:
             self.demo_service.abrir_demo()
         except ValueError as exc:
-            self._show_error(str(exc))
+            self._show_error(
+                self._value_error_message(
+                    exc,
+                    context="profiles.open_demo",
+                    fallback="No fue posible abrir el Perfil Demo.",
+                ),
+            )
             return
         self.profile_changed.emit()
 
@@ -100,7 +113,13 @@ class ProfilesPage(QWidget):
             self.demo_service.regenerar_demo()
             self.profile_service.seleccionar_perfil(PERFIL_DEMO)
         except ValueError as exc:
-            self._show_error(str(exc))
+            self._show_error(
+                self._value_error_message(
+                    exc,
+                    context="profiles.regenerate_demo",
+                    fallback="No fue posible regenerar el Perfil Demo.",
+                ),
+            )
             return
         self.profile_changed.emit()
 
@@ -109,7 +128,13 @@ class ProfilesPage(QWidget):
         try:
             self.profile_service.seleccionar_perfil(PERFIL_PERSONAL)
         except ValueError as exc:
-            self._show_error(str(exc))
+            self._show_error(
+                self._value_error_message(
+                    exc,
+                    context="profiles.open_personal",
+                    fallback="No fue posible abrir el perfil Personal.",
+                ),
+            )
             return
         self.profile_changed.emit()
 
@@ -122,7 +147,13 @@ class ProfilesPage(QWidget):
             profile = self.profile_service.crear_perfil(dialog.nombre())
             self.profile_service.seleccionar_perfil(profile.id)
         except ValueError as exc:
-            self._show_error(str(exc))
+            self._show_error(
+                self._value_error_message(
+                    exc,
+                    context="profiles.create",
+                    fallback="No fue posible crear el perfil.",
+                ),
+            )
             return
         self.profile_changed.emit()
 

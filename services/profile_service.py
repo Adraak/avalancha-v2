@@ -17,6 +17,7 @@ from avalancha.storage import BudgetRepository
 PERFIL_PERSONAL = "personal"
 PERFIL_DEMO = "demo_avalancha"
 
+from services.error_reporting_service import UserFacingError
 
 @dataclass(frozen=True, slots=True)
 class PerfilAplicacion:
@@ -87,13 +88,13 @@ class ProfileService:
         for item in self._read_registry():
             if item["slug"] == perfil_id:
                 return self._build_profile(item["slug"], item["nombre"], active_id)
-        raise ValueError("El perfil solicitado no existe.")
+        raise UserFacingError("El perfil solicitado no existe.")
 
     def crear_perfil(self, nombre: str) -> PerfilAplicacion:
         """Crea un perfil vacio e independiente."""
         clean_name = nombre.strip()
         if not clean_name:
-            raise ValueError("El perfil necesita un nombre.")
+            raise UserFacingError("El perfil necesita un nombre.")
         slug = self._unique_slug(self._slugify(clean_name))
         registry = self._read_registry()
         registry.append({"slug": slug, "nombre": clean_name})

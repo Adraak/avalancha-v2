@@ -14,6 +14,7 @@ from avalancha.models import (
 )
 from avalancha.storage import BudgetRepository
 
+from services.error_reporting_service import UserFacingError
 
 class DebtService:
     """Administra deudas sin depender de interfaz grafica."""
@@ -50,7 +51,7 @@ class DebtService:
         for debt in self.repository.load_debts():
             if debt.debt_id == debt_id:
                 return debt
-        raise ValueError("La deuda no existe.")
+        raise UserFacingError("La deuda no existe.")
 
     def obtener_pagos_deuda(
         self,
@@ -115,7 +116,7 @@ class DebtService:
     def eliminar_deuda(self, debt_id: str) -> None:
         """Elimina una deuda si no tiene movimientos asociados."""
         if self._deuda_tiene_movimientos(debt_id):
-            raise ValueError(
+            raise UserFacingError(
                 "No se puede eliminar una deuda con movimientos asociados. "
                 "Puedes desactivarla."
             )
@@ -139,13 +140,13 @@ class DebtService:
             "El monto del pago debe ser numerico.",
         )
         if amount <= 0:
-            raise ValueError("El monto del pago debe ser mayor que cero.")
+            raise UserFacingError("El monto del pago debe ser mayor que cero.")
         debts = self.repository.load_debts()
         index = self._buscar_indice(debts, debt_id)
         debt = debts[index]
         self._validar_deuda_pagable(debt)
         if amount > debt.current_balance:
-            raise ValueError(
+            raise UserFacingError(
                 "El pago no puede superar el saldo actual de la deuda."
             )
         debt.current_balance -= amount
@@ -161,7 +162,7 @@ class DebtService:
             "El monto del pago debe ser numerico.",
         )
         if amount <= 0:
-            raise ValueError("El monto del pago debe ser mayor que cero.")
+            raise UserFacingError("El monto del pago debe ser mayor que cero.")
         debts = self.repository.load_debts()
         index = self._buscar_indice(debts, debt_id)
         debt = debts[index]
@@ -280,26 +281,26 @@ class DebtService:
         }
         category = legacy.get(category, category)
         if category not in DEBT_CATEGORIES:
-            raise ValueError("La categoría de deuda no es válida.")
+            raise UserFacingError("La categoría de deuda no es válida.")
         return category
 
     @staticmethod
     def _validar_deuda(debt: Debt) -> None:
         """Valida reglas de negocio de deudas."""
         if not debt.name:
-            raise ValueError("El nombre de la deuda es obligatorio.")
+            raise UserFacingError("El nombre de la deuda es obligatorio.")
         if debt.category not in DEBT_CATEGORIES:
-            raise ValueError("La categoría de deuda no es válida.")
+            raise UserFacingError("La categoría de deuda no es válida.")
         if debt.current_monthly_payment <= 0:
-            raise ValueError("El pago mensual debe ser mayor que cero.")
+            raise UserFacingError("El pago mensual debe ser mayor que cero.")
 
     @staticmethod
     def _validar_deuda_pagable(debt: Debt) -> None:
         """Valida que una deuda pueda recibir pagos."""
         if not debt.active:
-            raise ValueError("No se puede pagar una deuda inactiva.")
+            raise UserFacingError("No se puede pagar una deuda inactiva.")
         if debt.current_balance <= 0:
-            raise ValueError("La deuda ya no tiene saldo pendiente.")
+            raise UserFacingError("La deuda ya no tiene saldo pendiente.")
 
     @staticmethod
     def _validar_nombre_duplicado(
@@ -313,7 +314,7 @@ class DebtService:
             if debt.debt_id == debt_id:
                 continue
             if debt.name.casefold() == normalized:
-                raise ValueError("Ya existe una deuda con ese nombre.")
+                raise UserFacingError("Ya existe una deuda con ese nombre.")
 
     @staticmethod
     def _buscar_indice(debts: list[Debt], debt_id: str) -> int:
@@ -321,7 +322,7 @@ class DebtService:
         for index, debt in enumerate(debts):
             if debt.debt_id == debt_id:
                 return index
-        raise ValueError("La deuda no existe.")
+        raise UserFacingError("La deuda no existe.")
 
     def _deuda_tiene_movimientos(self, debt_id: str) -> bool:
         """Indica si una deuda está usada por movimientos o recurrentes."""
@@ -339,9 +340,9 @@ class DebtService:
         try:
             amount = int(str(value).replace(".", "").replace(",", "").strip())
         except (TypeError, ValueError) as exc:
-            raise ValueError(message) from exc
+            raise UserFacingError(message) from exc
         if amount < 0:
-            raise ValueError(message)
+            raise UserFacingError(message)
         return amount
 
     @staticmethod
@@ -352,7 +353,7 @@ class DebtService:
         try:
             rate = float(str(value).replace(",", ".").strip())
         except (TypeError, ValueError) as exc:
-            raise ValueError("La tasa de interés debe ser numérica.") from exc
+            raise UserFacingError("La tasa de interés debe ser numérica.") from exc
         if rate < 0:
-            raise ValueError("La tasa de interés no puede ser negativa.")
+            raise UserFacingError("La tasa de interés no puede ser negativa.")
         return rate

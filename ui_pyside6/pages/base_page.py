@@ -5,6 +5,44 @@ from __future__ import annotations
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QLabel, QVBoxLayout, QWidget
 
+from services.error_reporting_service import SafeErrorReporter, UserFacingError
+
+
+class ErrorAwarePage(QWidget):
+    """Base para páginas que distinguen validación de fallo técnico."""
+
+    def __init__(self) -> None:
+        """Inicializa reporte técnico local sin escribir hasta un incidente."""
+        super().__init__()
+        self.error_reporter = SafeErrorReporter()
+
+    def _value_error_message(
+        self,
+        exc: ValueError,
+        *,
+        context: str,
+        fallback: str = "No fue posible completar la operación.",
+    ) -> str:
+        """Devuelve validación pública o registra un ValueError técnico."""
+        if isinstance(exc, UserFacingError):
+            return str(exc)
+        return self._technical_error(exc, context=context, fallback=fallback)
+
+    def _technical_error(
+        self,
+        exc: BaseException,
+        *,
+        context: str,
+        fallback: str,
+    ) -> str:
+        """Registra un fallo técnico sin exponer su contenido crudo."""
+        notice = self.error_reporter.report(
+            exc,
+            context=context,
+            user_message=fallback,
+        )
+        return notice.message
+
 
 class PlaceholderPage(QWidget):
     """Representa una sección aún no migrada a PySide6."""

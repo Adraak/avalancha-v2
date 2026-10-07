@@ -14,6 +14,7 @@ from core.models.monthly_closure import (
     MonthlyClosure,
 )
 
+from services.error_reporting_service import UserFacingError
 
 class MonthlyClosureService:
     """Administra estados y checklist de cierre mensual por perfil."""
@@ -117,7 +118,7 @@ class MonthlyClosureService:
         index, closure = self._get_or_create_in_list(closures, year, month)
         missing = closure.faltantes()
         if missing:
-            raise ValueError(
+            raise UserFacingError(
                 "No se puede cerrar el mes. Faltan: "
                 + ", ".join(missing)
                 + "."
@@ -274,7 +275,7 @@ class MonthlyClosureService:
                 return datetime.strptime(text, fmt).date()
             except ValueError:
                 continue
-        raise ValueError("La fecha no es valida.")
+        raise UserFacingError("La fecha no es valida.")
 
     def _save(self, closures: list[MonthlyClosure]) -> None:
         """Persiste cierres ordenados por mes."""

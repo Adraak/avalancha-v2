@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
 from core.models.presupuesto import Presupuesto
 from services.budget_service import BudgetService
 from services.monthly_closure_service import MonthlyClosureService
+from ui_pyside6.pages.base_page import ErrorAwarePage
 from ui_pyside6.pages.budget_dialog import BudgetDialog
 
 
@@ -36,7 +37,7 @@ class SortableItem(QTableWidgetItem):
         return super().__lt__(other)
 
 
-class BudgetsPage(QWidget):
+class BudgetsPage(ErrorAwarePage):
     """Pantalla CRUD de presupuestos usando BudgetService."""
 
     HEADERS = [
@@ -69,7 +70,13 @@ class BudgetsPage(QWidget):
         try:
             rows = self.service.calcular_ejecucion_general()
         except ValueError as exc:
-            self.table.setToolTip(str(exc))
+            self.table.setToolTip(
+                self._value_error_message(
+                    exc,
+                    context="budgets.refresh",
+                    fallback="No fue posible cargar los presupuestos.",
+                ),
+            )
             rows = []
         self._populate_table(rows)
 
@@ -83,7 +90,13 @@ class BudgetsPage(QWidget):
         try:
             self.service.crear_presupuesto(dialog.obtener_datos())
         except ValueError as exc:
-            self._show_error(str(exc))
+            self._show_error(
+                self._value_error_message(
+                    exc,
+                    context="budgets.create",
+                    fallback="No fue posible crear el presupuesto.",
+                ),
+            )
             return
         self.refresh()
 
@@ -104,7 +117,13 @@ class BudgetsPage(QWidget):
                 dialog.obtener_datos(),
             )
         except ValueError as exc:
-            self._show_error(str(exc))
+            self._show_error(
+                self._value_error_message(
+                    exc,
+                    context="budgets.edit",
+                    fallback="No fue posible editar el presupuesto.",
+                ),
+            )
             return
         self.refresh()
 
@@ -126,7 +145,13 @@ class BudgetsPage(QWidget):
         try:
             self.service.eliminar_presupuesto(presupuesto.id)
         except ValueError as exc:
-            self._show_error(str(exc))
+            self._show_error(
+                self._value_error_message(
+                    exc,
+                    context="budgets.delete",
+                    fallback="No fue posible eliminar el presupuesto.",
+                ),
+            )
             return
         self.refresh()
 
@@ -141,7 +166,13 @@ class BudgetsPage(QWidget):
         try:
             self.service.activar_presupuesto(presupuesto.id)
         except ValueError as exc:
-            self._show_error(str(exc))
+            self._show_error(
+                self._value_error_message(
+                    exc,
+                    context="budgets.activate",
+                    fallback="No fue posible activar el presupuesto.",
+                ),
+            )
             return
         self.refresh()
 
@@ -156,7 +187,13 @@ class BudgetsPage(QWidget):
         try:
             self.service.desactivar_presupuesto(presupuesto.id)
         except ValueError as exc:
-            self._show_error(str(exc))
+            self._show_error(
+                self._value_error_message(
+                    exc,
+                    context="budgets.deactivate",
+                    fallback="No fue posible desactivar el presupuesto.",
+                ),
+            )
             return
         self.refresh()
 

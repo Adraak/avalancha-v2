@@ -17,6 +17,7 @@ from core.models.categoria import (
     Categoria,
 )
 
+from services.error_reporting_service import UserFacingError
 
 class CategoryService:
     """Administra categorias por perfil sin depender de interfaz grafica."""
@@ -122,7 +123,7 @@ class CategoryService:
         for categoria in self.listar_categorias():
             if categoria.id == categoria_id:
                 return categoria
-        raise ValueError("La categoria no existe.")
+        raise UserFacingError("La categoria no existe.")
 
     def obtener_por_nombre(
         self,
@@ -226,9 +227,9 @@ class CategoryService:
         """Valida que una categoria pueda usarse en un movimiento."""
         categoria = self.obtener_por_nombre(nombre, tipo)
         if categoria is None:
-            raise ValueError("La categoria seleccionada no existe.")
+            raise UserFacingError("La categoria seleccionada no existe.")
         if not categoria.activa and not permitir_inactiva:
-            raise ValueError("La categoria seleccionada esta inactiva.")
+            raise UserFacingError("La categoria seleccionada esta inactiva.")
 
     def validar_categoria_presupuesto(
         self,
@@ -238,9 +239,9 @@ class CategoryService:
         """Valida que una categoria pueda usarse en presupuestos."""
         categoria = self.obtener_por_nombre(nombre, EXPENSE)
         if categoria is None:
-            raise ValueError("La categoria seleccionada no existe.")
+            raise UserFacingError("La categoria seleccionada no existe.")
         if not categoria.activa and not permitir_inactiva:
-            raise ValueError("La categoria seleccionada esta inactiva.")
+            raise UserFacingError("La categoria seleccionada esta inactiva.")
 
     def sincronizar_desde_datos(self) -> list[Categoria]:
         """Sincroniza categorias formales desde datos heredados."""
@@ -295,9 +296,9 @@ class CategoryService:
     ) -> None:
         """Aplica reglas de negocio de categorias."""
         if categoria.tipo not in TIPOS_CATEGORIA:
-            raise ValueError("El tipo de categoria no es valido.")
+            raise UserFacingError("El tipo de categoria no es valido.")
         if categoria.clase not in CLASES_CATEGORIA:
-            raise ValueError("La clase de categoria no es valida.")
+            raise UserFacingError("La clase de categoria no es valida.")
         if not categoria.activa:
             return
         nombre = self._normalizar_nombre(categoria.nombre)
@@ -310,7 +311,7 @@ class CategoryService:
                 actual.tipo,
                 categoria.tipo,
             }:
-                raise ValueError(
+                raise UserFacingError(
                     "Ya existe una categoria activa con ese nombre y tipo."
                 )
 
@@ -476,7 +477,7 @@ class CategoryService:
         """Normaliza y valida tipo de categoria."""
         tipo_normalizado = tipo.strip().lower()
         if tipo_normalizado not in TIPOS_CATEGORIA:
-            raise ValueError("El tipo de categoria no es valido.")
+            raise UserFacingError("El tipo de categoria no es valido.")
         return tipo_normalizado
 
     @staticmethod
@@ -507,4 +508,4 @@ class CategoryService:
         for index, categoria in enumerate(categorias):
             if categoria.id == categoria_id:
                 return index
-        raise ValueError("La categoria no existe.")
+        raise UserFacingError("La categoria no existe.")

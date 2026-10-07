@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
 from core.models.movimiento import Movimiento
 from services.movement_service import MovementService
 from services.monthly_closure_service import MonthlyClosureService
+from ui_pyside6.pages.base_page import ErrorAwarePage
 from ui_pyside6.pages.movement_dialog import MovementDialog
 
 
@@ -37,7 +38,7 @@ class SortableItem(QTableWidgetItem):
         return super().__lt__(other)
 
 
-class MovementsPage(QWidget):
+class MovementsPage(ErrorAwarePage):
     """Pantalla CRUD de movimientos usando MovementService."""
 
     movements_changed = Signal(str)
@@ -115,7 +116,13 @@ class MovementsPage(QWidget):
         try:
             self.service.crear_movimiento(**datos)
         except ValueError as exc:
-            self._show_error(str(exc))
+            self._show_error(
+                self._value_error_message(
+                    exc,
+                    context="movements.create",
+                    fallback="No fue posible crear el movimiento.",
+                ),
+            )
             return
         self.refresh()
         self.movements_changed.emit("created")
@@ -140,7 +147,13 @@ class MovementsPage(QWidget):
                 **datos,
             )
         except ValueError as exc:
-            self._show_error(str(exc))
+            self._show_error(
+                self._value_error_message(
+                    exc,
+                    context="movements.edit",
+                    fallback="No fue posible editar el movimiento.",
+                ),
+            )
             return
         self.refresh()
         self.movements_changed.emit("updated")
@@ -163,7 +176,13 @@ class MovementsPage(QWidget):
         try:
             self.service.eliminar_movimiento(movement.id)
         except ValueError as exc:
-            self._show_error(str(exc))
+            self._show_error(
+                self._value_error_message(
+                    exc,
+                    context="movements.delete",
+                    fallback="No fue posible eliminar el movimiento.",
+                ),
+            )
             return
         self.refresh()
         self.movements_changed.emit("deleted")
@@ -343,7 +362,13 @@ class MovementsPage(QWidget):
         try:
             warning = self.closure_service.advertencia_modificacion_fecha(fecha)
         except ValueError as exc:
-            self._show_error(str(exc))
+            self._show_error(
+                self._value_error_message(
+                    exc,
+                    context="movements.closed_month_check",
+                    fallback="No fue posible validar el estado del mes.",
+                ),
+            )
             return False
         if not warning:
             return True

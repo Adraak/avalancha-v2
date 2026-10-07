@@ -24,9 +24,10 @@ from core.models.monthly_closure import (
     MonthlyClosure,
 )
 from services.monthly_closure_service import MonthlyClosureService
+from ui_pyside6.pages.base_page import ErrorAwarePage
 
 
-class MonthlyClosurePage(QWidget):
+class MonthlyClosurePage(ErrorAwarePage):
     """Pantalla operativa para revisar y cerrar meses financieros."""
 
     STATUS_LABELS = {
@@ -71,7 +72,13 @@ class MonthlyClosurePage(QWidget):
                 self.month_input.value(),
             )
         except ValueError as exc:
-            self._show_info(str(exc))
+            self._show_info(
+                self._value_error_message(
+                    exc,
+                    context="monthly_closure.close",
+                    fallback="No fue posible cerrar el mes.",
+                ),
+            )
             self.refresh()
             return
         self._load_closure(closure)

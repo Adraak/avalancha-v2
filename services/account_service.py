@@ -7,6 +7,7 @@ from pathlib import Path
 from avalancha.models import ACCOUNT_TYPES, CuentaFinanciera, new_id, today_iso
 from avalancha.storage import BudgetRepository
 
+from services.error_reporting_service import UserFacingError
 
 class AccountService:
     """Administra cuentas financieras sin depender de interfaz grafica."""
@@ -52,7 +53,7 @@ class AccountService:
         for cuenta in self.obtener_cuentas():
             if cuenta.account_id == cuenta_id:
                 return cuenta
-        raise ValueError("La cuenta no existe.")
+        raise UserFacingError("La cuenta no existe.")
 
     def crear_cuenta(self, datos: dict[str, object]) -> CuentaFinanciera:
         """Crea y persiste una cuenta financiera."""
@@ -83,7 +84,7 @@ class AccountService:
     def eliminar_cuenta(self, cuenta_id: str) -> None:
         """Elimina una cuenta si no tiene movimientos asociados."""
         if self._cuenta_tiene_movimientos(cuenta_id):
-            raise ValueError(
+            raise UserFacingError(
                 "No se puede eliminar una cuenta con movimientos asociados. "
                 "Puedes desactivarla."
             )
@@ -192,16 +193,24 @@ class AccountService:
         actual: CuentaFinanciera | None = None,
     ) -> CuentaFinanciera:
         """Construye una cuenta desde datos validados externamente."""
+        name = str(datos.get("name", datos.get("nombre", ""))).strip()
+        account_type = str(
+            datos.get("account_type", datos.get("tipo", "")),
+        ).strip()
+        if not name:
+            raise UserFacingError("El nombre de la cuenta es obligatorio.")
+        if not account_type:
+            raise UserFacingError("El tipo de cuenta es obligatorio.")
+        if account_type not in ACCOUNT_TYPES:
+            raise UserFacingError("El tipo de cuenta no es valido.")
         return CuentaFinanciera(
             account_id=(
                 cuenta_id
                 or str(datos.get("account_id", "")).strip()
                 or new_id()
             ),
-            name=str(datos.get("name", datos.get("nombre", ""))).strip(),
-            account_type=str(
-                datos.get("account_type", datos.get("tipo", "")),
-            ).strip(),
+            name=name,
+            account_type=account_type,
             initial_balance=self._normalizar_monto(
                 datos.get(
                     "initial_balance",
@@ -235,11 +244,11 @@ class AccountService:
     def _validar_cuenta(self, cuenta: CuentaFinanciera) -> None:
         """Valida reglas de negocio de cuentas."""
         if not cuenta.name:
-            raise ValueError("El nombre de la cuenta es obligatorio.")
+            raise UserFacingError("El nombre de la cuenta es obligatorio.")
         if not cuenta.account_type:
-            raise ValueError("El tipo de cuenta es obligatorio.")
+            raise UserFacingError("El tipo de cuenta es obligatorio.")
         if cuenta.account_type not in ACCOUNT_TYPES:
-            raise ValueError("El tipo de cuenta no es valido.")
+            raise UserFacingError("El tipo de cuenta no es valido.")
 
     @staticmethod
     def _validar_nombre_duplicado(
@@ -253,7 +262,7 @@ class AccountService:
             if cuenta.account_id == cuenta_id:
                 continue
             if cuenta.name.casefold() == normalized:
-                raise ValueError("Ya existe una cuenta con ese nombre.")
+                raise UserFacingError("Ya existe una cuenta con ese nombre.")
 
     @staticmethod
     def _buscar_indice(
@@ -264,7 +273,7 @@ class AccountService:
         for index, cuenta in enumerate(cuentas):
             if cuenta.account_id == cuenta_id:
                 return index
-        raise ValueError("La cuenta no existe.")
+        raise UserFacingError("La cuenta no existe.")
 
     def _cuenta_tiene_movimientos(self, cuenta_id: str) -> bool:
         """Indica si una cuenta esta usada por movimientos o recurrentes."""
@@ -284,7 +293,7 @@ class AccountService:
         try:
             return int(str(value).replace(".", "").replace(",", "").strip())
         except (TypeError, ValueError) as exc:
-            raise ValueError("El saldo inicial debe ser numerico.") from exc
+            raise UserFacingError("El saldo inicial debe ser numerico.") from exc
 
     @staticmethod
     def _normalizar_saldo_real(value: object) -> int | None:
@@ -294,4 +303,4 @@ class AccountService:
         try:
             return int(str(value).replace(".", "").replace(",", "").strip())
         except (TypeError, ValueError) as exc:
-            raise ValueError("El saldo real debe ser numerico.") from exc
+            raise UserFacingError("El saldo real debe ser numerico.") from exc

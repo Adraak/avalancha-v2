@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
 
 from core.models.conciliacion import Conciliacion
 from services.reconciliation_service import ReconciliationService
+from ui_pyside6.pages.base_page import ErrorAwarePage
 from ui_pyside6.pages.reconciliation_dialog import ReconciliationDialog
 
 
@@ -35,7 +36,7 @@ class SortableItem(QTableWidgetItem):
         return super().__lt__(other)
 
 
-class ReconciliationPage(QWidget):
+class ReconciliationPage(ErrorAwarePage):
     """Pantalla CRUD de conciliacion usando ReconciliationService."""
 
     HEADERS = [
@@ -71,7 +72,13 @@ class ReconciliationPage(QWidget):
         try:
             self.service.crear_conciliacion(dialog.obtener_datos())
         except ValueError as exc:
-            self._show_error(str(exc))
+            self._show_error(
+                self._value_error_message(
+                    exc,
+                    context="reconciliation.create",
+                    fallback="No fue posible crear la conciliación.",
+                ),
+            )
             return
         self.refresh()
 
@@ -90,7 +97,13 @@ class ReconciliationPage(QWidget):
                 dialog.obtener_datos(),
             )
         except ValueError as exc:
-            self._show_error(str(exc))
+            self._show_error(
+                self._value_error_message(
+                    exc,
+                    context="reconciliation.edit",
+                    fallback="No fue posible editar la conciliación.",
+                ),
+            )
             return
         self.refresh()
 
@@ -110,7 +123,13 @@ class ReconciliationPage(QWidget):
         try:
             self.service.eliminar_conciliacion(reconciliation.id)
         except ValueError as exc:
-            self._show_error(str(exc))
+            self._show_error(
+                self._value_error_message(
+                    exc,
+                    context="reconciliation.delete",
+                    fallback="No fue posible eliminar la conciliación.",
+                ),
+            )
             return
         self.refresh()
 
@@ -123,7 +142,13 @@ class ReconciliationPage(QWidget):
         try:
             self.service.marcar_como_revisada(reconciliation.id)
         except ValueError as exc:
-            self._show_error(str(exc))
+            self._show_error(
+                self._value_error_message(
+                    exc,
+                    context="reconciliation.mark_reviewed",
+                    fallback="No fue posible marcar la conciliación como revisada.",
+                ),
+            )
             return
         self.refresh()
 

@@ -27,6 +27,7 @@ from services.debt_analytics_service import (
 from services.debt_service import DebtService
 from services.monthly_closure_service import MonthlyClosureService
 from ui_pyside6.color_system import get_debt_status_color
+from ui_pyside6.pages.base_page import ErrorAwarePage
 from ui_pyside6.pages.debt_dialog import DebtDialog
 
 
@@ -45,7 +46,7 @@ class SortableItem(QTableWidgetItem):
         return super().__lt__(other)
 
 
-class DebtsPage(QWidget):
+class DebtsPage(ErrorAwarePage):
     """CRUD de deudas del perfil activo usando DebtService."""
 
     HEADERS = [
@@ -108,7 +109,13 @@ class DebtsPage(QWidget):
         try:
             self.service.crear_deuda(dialog.obtener_datos())
         except ValueError as exc:
-            self._show_error(str(exc))
+            self._show_error(
+                self._value_error_message(
+                    exc,
+                    context="debts.create",
+                    fallback="No fue posible crear la deuda.",
+                ),
+            )
             return
         self.refresh()
 
@@ -126,7 +133,13 @@ class DebtsPage(QWidget):
         try:
             self.service.editar_deuda(debt.debt_id, dialog.obtener_datos())
         except ValueError as exc:
-            self._show_error(str(exc))
+            self._show_error(
+                self._value_error_message(
+                    exc,
+                    context="debts.edit",
+                    fallback="No fue posible editar la deuda.",
+                ),
+            )
             return
         self.refresh()
 
@@ -148,7 +161,13 @@ class DebtsPage(QWidget):
         try:
             self.service.eliminar_deuda(debt.debt_id)
         except ValueError as exc:
-            self._show_error(str(exc))
+            self._show_error(
+                self._value_error_message(
+                    exc,
+                    context="debts.delete",
+                    fallback="No fue posible eliminar la deuda.",
+                ),
+            )
             return
         self.refresh()
 
@@ -401,7 +420,13 @@ class DebtsPage(QWidget):
             else:
                 self.service.desactivar_deuda(debt.debt_id)
         except ValueError as exc:
-            self._show_error(str(exc))
+            self._show_error(
+                self._value_error_message(
+                    exc,
+                    context="debts.change_state",
+                    fallback="No fue posible cambiar el estado de la deuda.",
+                ),
+            )
             return
         self.refresh()
 

@@ -18,6 +18,10 @@ _MAX_LOG_SIZE = 1024 * 1024
 _MAX_ROTATED_FILES = 3
 
 
+class UserFacingError(ValueError):
+    """Validación cuyo mensaje es seguro para mostrar en la interfaz."""
+
+
 @dataclass(frozen=True, slots=True)
 class ErrorNotice:
     """Mensaje público asociado a un incidente técnico local."""

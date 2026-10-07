@@ -17,6 +17,7 @@ from avalancha.models import (
 from avalancha.storage import BudgetRepository
 
 from core.models.movimiento import Movimiento
+from services.error_reporting_service import UserFacingError
 from services.category_service import CategoryService
 from services.debt_service import DebtService
 
@@ -146,7 +147,7 @@ class MovementService:
     ) -> Movimiento:
         """Crea un pago de deuda sin registrarlo como gasto mensual."""
         if imprevisto:
-            raise ValueError("El pago de deuda no puede ser imprevisto.")
+            raise UserFacingError("El pago de deuda no puede ser imprevisto.")
         movimiento = Movimiento(
             id=uuid4().hex,
             fecha=self._normalizar_fecha(fecha),
@@ -178,7 +179,7 @@ class MovementService:
     ) -> Movimiento:
         """Crea una transferencia interna entre cuentas propias."""
         if imprevisto:
-            raise ValueError("La transferencia no puede ser imprevisto.")
+            raise UserFacingError("La transferencia no puede ser imprevisto.")
         movimiento = Movimiento(
             id=uuid4().hex,
             fecha=self._normalizar_fecha(fecha),
@@ -214,11 +215,11 @@ class MovementService:
         """Actualiza un movimiento existente."""
         original = self._obtener_transaccion(movimiento_id)
         if original is None:
-            raise ValueError("El movimiento no existe.")
+            raise UserFacingError("El movimiento no existe.")
         normalized_type = str(tipo).strip().lower()
         if normalized_type == "transferencia":
             if imprevisto:
-                raise ValueError("La transferencia no puede ser imprevisto.")
+                raise UserFacingError("La transferencia no puede ser imprevisto.")
             movimiento = Movimiento(
                 id=movimiento_id,
                 fecha=self._normalizar_fecha(fecha),
@@ -240,7 +241,7 @@ class MovementService:
             return movimiento
         if normalized_type == "pago_deuda":
             if imprevisto:
-                raise ValueError("El pago de deuda no puede ser imprevisto.")
+                raise UserFacingError("El pago de deuda no puede ser imprevisto.")
             movimiento = Movimiento(
                 id=movimiento_id,
                 fecha=self._normalizar_fecha(fecha),
@@ -345,10 +346,10 @@ class MovementService:
         """Devuelve movimientos asociados a una cuenta origen o destino."""
         cuenta_id = str(cuenta_id).strip()
         if not cuenta_id:
-            raise ValueError("Debe seleccionar una cuenta.")
+            raise UserFacingError("Debe seleccionar una cuenta.")
         cuentas = {item.id for item in self.obtener_cuentas()}
         if cuenta_id not in cuentas:
-            raise ValueError("La cuenta seleccionada no existe.")
+            raise UserFacingError("La cuenta seleccionada no existe.")
         return [
             movimiento
             for movimiento in self.obtener_movimientos()
@@ -410,32 +411,32 @@ class MovementService:
         """Valida reglas de negocio antes de guardar."""
         cuentas = {item.id for item in self.obtener_cuentas()}
         if movimiento.monto <= 0:
-            raise ValueError("El monto debe ser mayor que cero.")
+            raise UserFacingError("El monto debe ser mayor que cero.")
         if movimiento.tipo == "transferencia":
             if movimiento.cuenta_id not in cuentas:
-                raise ValueError("La cuenta origen seleccionada no existe.")
+                raise UserFacingError("La cuenta origen seleccionada no existe.")
             if movimiento.cuenta_destino_id not in cuentas:
-                raise ValueError("La cuenta destino seleccionada no existe.")
+                raise UserFacingError("La cuenta destino seleccionada no existe.")
             if movimiento.cuenta_id == movimiento.cuenta_destino_id:
-                raise ValueError(
+                raise UserFacingError(
                     "La cuenta origen y destino deben ser distintas."
                 )
             if movimiento.imprevisto:
-                raise ValueError("La transferencia no puede ser imprevisto.")
+                raise UserFacingError("La transferencia no puede ser imprevisto.")
             return
         if movimiento.tipo == "pago_deuda":
             if movimiento.cuenta_id not in cuentas:
-                raise ValueError("La cuenta origen seleccionada no existe.")
+                raise UserFacingError("La cuenta origen seleccionada no existe.")
             if movimiento.imprevisto:
-                raise ValueError("El pago de deuda no puede ser imprevisto.")
+                raise UserFacingError("El pago de deuda no puede ser imprevisto.")
             if movimiento.recurrente_id:
-                raise ValueError("El pago de deuda no puede ser recurrente.")
+                raise UserFacingError("El pago de deuda no puede ser recurrente.")
             debts = {
                 item.debt_id: item
                 for item in self.debt_service.obtener_deudas_activas()
             }
             if movimiento.deuda_id not in debts:
-                raise ValueError("La deuda seleccionada no existe.")
+                raise UserFacingError("La deuda seleccionada no existe.")
             return
         permitir_inactiva = (
             categoria_original is not None
@@ -447,7 +448,7 @@ class MovementService:
             permitir_inactiva=permitir_inactiva,
         )
         if movimiento.cuenta_id not in cuentas:
-            raise ValueError("La cuenta seleccionada no existe.")
+            raise UserFacingError("La cuenta seleccionada no existe.")
 
     def _existe_movimiento(self, movimiento_id: str) -> bool:
         """Indica si existe un movimiento en el mes activo."""
@@ -578,7 +579,7 @@ class MovementService:
         """Revierte el saldo y elimina el pago activo asociado al movimiento."""
         debt = debts.get(original.debt_id or "")
         if debt is None:
-            raise ValueError("La deuda original del pago no existe.")
+            raise UserFacingError("La deuda original del pago no existe.")
 
         payment = next(
             (
@@ -618,11 +619,11 @@ class MovementService:
         """Registra pago formal y snapshot de saldo posterior."""
         debt = debts.get(movimiento.deuda_id or "")
         if debt is None:
-            raise ValueError("La deuda seleccionada no existe.")
+            raise UserFacingError("La deuda seleccionada no existe.")
         if not debt.active:
-            raise ValueError("No se puede pagar una deuda inactiva.")
+            raise UserFacingError("No se puede pagar una deuda inactiva.")
         if movimiento.monto > debt.current_balance:
-            raise ValueError(
+            raise UserFacingError(
                 "El pago no puede superar el saldo actual de la deuda."
             )
 
@@ -700,7 +701,7 @@ class MovementService:
                 return datetime.strptime(text, fmt).date()
             except ValueError:
                 continue
-        raise ValueError("La fecha no es valida.")
+        raise UserFacingError("La fecha no es valida.")
 
     @staticmethod
     def _normalizar_monto(value: int | str) -> int:
@@ -708,7 +709,7 @@ class MovementService:
         try:
             amount = int(str(value).replace(".", "").replace(",", "").strip())
         except (TypeError, ValueError) as exc:
-            raise ValueError("El monto debe ser numerico.") from exc
+            raise UserFacingError("El monto debe ser numerico.") from exc
         if amount <= 0:
-            raise ValueError("El monto debe ser mayor que cero.")
+            raise UserFacingError("El monto debe ser mayor que cero.")
         return amount

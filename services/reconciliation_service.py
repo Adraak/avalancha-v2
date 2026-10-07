@@ -12,6 +12,7 @@ from avalancha.storage import BudgetRepository
 from core.models.conciliacion import Conciliacion
 from core.models.cuenta import Cuenta
 from core.models.movimiento import Movimiento
+from services.error_reporting_service import UserFacingError
 from services.account_service import AccountService
 from services.movement_service import MovementService
 
@@ -78,7 +79,7 @@ class ReconciliationService:
             cuenta.real_balance is not None
             and cuenta.reconciliation_date == fecha.isoformat()
         ):
-            raise ValueError(
+            raise UserFacingError(
                 "Ya existe una conciliacion para esa cuenta y fecha."
             )
         return self._guardar_desde_datos(cuenta_id, datos)
@@ -92,7 +93,7 @@ class ReconciliationService:
         self.account_service.obtener_cuenta_por_id(conciliacion_id)
         cuenta_id = str(datos.get("cuenta_id", conciliacion_id)).strip()
         if cuenta_id != conciliacion_id:
-            raise ValueError("No se puede cambiar la cuenta conciliada.")
+            raise UserFacingError("No se puede cambiar la cuenta conciliada.")
         return self._guardar_desde_datos(conciliacion_id, datos)
 
     def eliminar_conciliacion(self, conciliacion_id: str) -> None:
@@ -327,7 +328,7 @@ class ReconciliationService:
         try:
             return int(str(value).replace(".", "").replace(",", "").strip())
         except (TypeError, ValueError) as exc:
-            raise ValueError("El saldo real debe ser numerico.") from exc
+            raise UserFacingError("El saldo real debe ser numerico.") from exc
 
     @staticmethod
     def _normalizar_fecha(value: object) -> date:
@@ -335,14 +336,14 @@ class ReconciliationService:
         if isinstance(value, date):
             return value
         if value in ("", None):
-            raise ValueError("La fecha de conciliacion es obligatoria.")
+            raise UserFacingError("La fecha de conciliacion es obligatoria.")
         text = str(value).strip()
         for fmt in ("%Y-%m-%d", "%d-%m-%Y"):
             try:
                 return datetime.strptime(text, fmt).date()
             except ValueError:
                 continue
-        raise ValueError("La fecha de conciliacion no es valida.")
+        raise UserFacingError("La fecha de conciliacion no es valida.")
 
     @staticmethod
     def _account_id(cuenta: Cuenta | Any) -> str:

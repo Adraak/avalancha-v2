@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
 from avalancha.models import CuentaFinanciera
 from services.account_service import AccountService
 from ui_pyside6.pages.account_dialog import AccountDialog
+from ui_pyside6.pages.base_page import ErrorAwarePage
 
 
 class SortableItem(QTableWidgetItem):
@@ -35,7 +36,7 @@ class SortableItem(QTableWidgetItem):
         return super().__lt__(other)
 
 
-class AccountsPage(QWidget):
+class AccountsPage(ErrorAwarePage):
     """CRUD de cuentas del perfil activo usando AccountService."""
 
     movements_requested = Signal(str, str)
@@ -70,7 +71,13 @@ class AccountsPage(QWidget):
         try:
             self.service.crear_cuenta(dialog.obtener_datos())
         except ValueError as exc:
-            self._show_error(str(exc))
+            self._show_error(
+                self._value_error_message(
+                    exc,
+                    context="accounts.create",
+                    fallback="No fue posible crear la cuenta.",
+                ),
+            )
             return
         self.refresh()
 
@@ -86,7 +93,13 @@ class AccountsPage(QWidget):
         try:
             self.service.editar_cuenta(account.account_id, dialog.obtener_datos())
         except ValueError as exc:
-            self._show_error(str(exc))
+            self._show_error(
+                self._value_error_message(
+                    exc,
+                    context="accounts.edit",
+                    fallback="No fue posible editar la cuenta.",
+                ),
+            )
             return
         self.refresh()
 
@@ -106,7 +119,13 @@ class AccountsPage(QWidget):
         try:
             self.service.eliminar_cuenta(account.account_id)
         except ValueError as exc:
-            self._show_error(str(exc))
+            self._show_error(
+                self._value_error_message(
+                    exc,
+                    context="accounts.delete",
+                    fallback="No fue posible eliminar la cuenta.",
+                ),
+            )
             return
         self.refresh()
 
@@ -243,7 +262,13 @@ class AccountsPage(QWidget):
             else:
                 self.service.desactivar_cuenta(account.account_id)
         except ValueError as exc:
-            self._show_error(str(exc))
+            self._show_error(
+                self._value_error_message(
+                    exc,
+                    context="accounts.change_state",
+                    fallback="No fue posible cambiar el estado de la cuenta.",
+                ),
+            )
             return
         self.refresh()
 

@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
 
 from core.models.categoria import Categoria
 from services.category_service import CategoryService
+from ui_pyside6.pages.base_page import ErrorAwarePage
 from ui_pyside6.pages.category_dialog import CategoryDialog
 
 
@@ -36,7 +37,7 @@ class CategoryItem(QTableWidgetItem):
         return super().__lt__(other)
 
 
-class CategoriesPage(QWidget):
+class CategoriesPage(ErrorAwarePage):
     """Pantalla CRUD de categorías usando CategoryService."""
 
     HEADERS = ["Nombre", "Tipo", "Clase", "Estado", "Color"]
@@ -74,7 +75,13 @@ class CategoriesPage(QWidget):
                 ),
             )
         except ValueError as exc:
-            self._show_error(str(exc))
+            self._show_error(
+                self._value_error_message(
+                    exc,
+                    context="categories.create",
+                    fallback="No fue posible crear la categoría.",
+                ),
+            )
             return
         self.refresh()
 
@@ -102,7 +109,13 @@ class CategoriesPage(QWidget):
                 activa=bool(data["activa"]),
             )
         except ValueError as exc:
-            self._show_error(str(exc))
+            self._show_error(
+                self._value_error_message(
+                    exc,
+                    context="categories.edit",
+                    fallback="No fue posible editar la categoría.",
+                ),
+            )
             return
         self.refresh()
 
@@ -115,7 +128,13 @@ class CategoriesPage(QWidget):
         try:
             self.service.desactivar_categoria(categoria.id)
         except ValueError as exc:
-            self._show_error(str(exc))
+            self._show_error(
+                self._value_error_message(
+                    exc,
+                    context="categories.deactivate",
+                    fallback="No fue posible desactivar la categoría.",
+                ),
+            )
             return
         self.refresh()
 
@@ -128,7 +147,13 @@ class CategoriesPage(QWidget):
         try:
             self.service.activar_categoria(categoria.id)
         except ValueError as exc:
-            self._show_error(str(exc))
+            self._show_error(
+                self._value_error_message(
+                    exc,
+                    context="categories.activate",
+                    fallback="No fue posible activar la categoría.",
+                ),
+            )
             return
         self.refresh()
 

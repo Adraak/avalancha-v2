@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
 
 from services.report_service import ReportService
 from services.monthly_closure_service import MonthlyClosureService
+from ui_pyside6.pages.base_page import ErrorAwarePage
 from ui_pyside6.pages.report_viewer_dialog import ReportViewerDialog
 
 
@@ -40,7 +41,7 @@ class SortableItem(QTableWidgetItem):
         return super().__lt__(other)
 
 
-class ReportsPage(QWidget):
+class ReportsPage(ErrorAwarePage):
     """Pantalla de generacion y lectura de reportes cifrados."""
 
     HEADERS = ["Mes", "Generado", "Archivo", "Estado"]
@@ -82,7 +83,13 @@ class ReportsPage(QWidget):
             self.closure_service.marcar_reporte_generado(year, month, True)
             opened = self.service.abrir_reporte_cifrado(entry["id"])
         except ValueError as exc:
-            self._show_error(str(exc))
+            self._show_error(
+                self._value_error_message(
+                    exc,
+                    context="reports.generate",
+                    fallback="No fue posible generar el reporte.",
+                ),
+            )
             return
         self.refresh()
         ReportViewerDialog(opened, self).exec()
@@ -96,7 +103,13 @@ class ReportsPage(QWidget):
         try:
             report = self.service.abrir_reporte_cifrado(str(entry["id"]))
         except ValueError as exc:
-            self._show_error(str(exc))
+            self._show_error(
+                self._value_error_message(
+                    exc,
+                    context="reports.open",
+                    fallback="No fue posible abrir el reporte.",
+                ),
+            )
             return
         ReportViewerDialog(report, self).exec()
 
@@ -116,7 +129,13 @@ class ReportsPage(QWidget):
         try:
             self.service.eliminar_reporte(str(entry["id"]))
         except ValueError as exc:
-            self._show_error(str(exc))
+            self._show_error(
+                self._value_error_message(
+                    exc,
+                    context="reports.delete",
+                    fallback="No fue posible eliminar el reporte.",
+                ),
+            )
             return
         self.refresh()
 

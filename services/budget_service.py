@@ -12,6 +12,7 @@ from avalancha.models import CategoryBudget, EXPENSE
 from avalancha.storage import BudgetRepository
 
 from core.models.presupuesto import Presupuesto
+from services.error_reporting_service import UserFacingError
 from services.category_service import CategoryService
 from services.movement_service import MovementService
 
@@ -197,13 +198,13 @@ class BudgetService:
     ) -> None:
         """Valida reglas de negocio del presupuesto."""
         if not presupuesto.nombre:
-            raise ValueError("El nombre del presupuesto es obligatorio.")
+            raise UserFacingError("El nombre del presupuesto es obligatorio.")
         if not presupuesto.categoria:
-            raise ValueError("La categoria es obligatoria.")
+            raise UserFacingError("La categoria es obligatoria.")
         if presupuesto.monto_mensual <= 0:
-            raise ValueError("El monto mensual debe ser mayor que cero.")
+            raise UserFacingError("El monto mensual debe ser mayor que cero.")
         if not presupuesto.moneda:
-            raise ValueError("La moneda es obligatoria.")
+            raise UserFacingError("La moneda es obligatoria.")
         permitir_inactiva = (
             categoria_original is not None
             and presupuesto.categoria.casefold() == categoria_original.casefold()
@@ -233,7 +234,7 @@ class BudgetService:
                 current.fecha_inicio,
                 current.fecha_termino,
             ):
-                raise ValueError(
+                raise UserFacingError(
                     "Ya existe un presupuesto activo para esa categoria "
                     "en el periodo indicado."
                 )
@@ -284,7 +285,7 @@ class BudgetService:
         for index, category in enumerate(categories):
             if category.budget_id == presupuesto_id:
                 return index
-        raise ValueError("El presupuesto no existe.")
+        raise UserFacingError("El presupuesto no existe.")
 
     def _crear_modelo(
         self,
@@ -299,7 +300,7 @@ class BudgetService:
         end = self._normalizar_fecha(datos.get("fecha_termino"), None)
         moneda = str(datos.get("moneda", "CLP")).strip().upper()
         if not moneda:
-            raise ValueError("La moneda es obligatoria.")
+            raise UserFacingError("La moneda es obligatoria.")
         return Presupuesto(
             id=presupuesto_id,
             nombre=str(datos.get("nombre", "")).strip(),
@@ -380,7 +381,7 @@ class BudgetService:
                 return datetime.strptime(text, fmt).date()
             except ValueError:
                 continue
-        raise ValueError("La fecha no es valida.")
+        raise UserFacingError("La fecha no es valida.")
 
     @staticmethod
     def _normalizar_monto(value: object) -> int:
@@ -388,9 +389,9 @@ class BudgetService:
         try:
             amount = int(str(value).replace(".", "").replace(",", "").strip())
         except (TypeError, ValueError) as exc:
-            raise ValueError("El monto mensual debe ser numerico.") from exc
+            raise UserFacingError("El monto mensual debe ser numerico.") from exc
         if amount <= 0:
-            raise ValueError("El monto mensual debe ser mayor que cero.")
+            raise UserFacingError("El monto mensual debe ser mayor que cero.")
         return amount
 
     @staticmethod
