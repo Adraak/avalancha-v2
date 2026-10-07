@@ -289,6 +289,11 @@ class MainWindow(QMainWindow):
             self.demo_service,
         )
         profiles_page.profile_changed.connect(self._reload_profile)
+        settings_page = SettingsPage(
+            settings_service,
+            profile=profile,
+        )
+        settings_page.profile_restored.connect(self._reload_profile)
         return [
             NavigationItem(
                 "Resumen",
@@ -329,7 +334,7 @@ class MainWindow(QMainWindow):
                 ReconciliationPage(reconciliation_service),
             ),
             NavigationItem("Perfiles", profiles_page),
-            NavigationItem("Configuración", SettingsPage(settings_service)),
+            NavigationItem("Configuración", settings_page),
         ]
 
     def _select_section(self, index: int) -> None:

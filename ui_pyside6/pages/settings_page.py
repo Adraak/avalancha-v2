@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -19,22 +20,43 @@ from PySide6.QtWidgets import (
 )
 
 from core.models.configuracion import ConfiguracionAplicacion
+from services.backup_service import BackupValidator, ProfileBackupService
+from services.profile_restore_service import ProfileRestoreService
+from services.profile_service import PerfilAplicacion
 from services.settings_service import SettingsService
 
 
 class SettingsPage(QWidget):
     """Pantalla para editar configuracion persistida por perfil."""
 
-    def __init__(self, service: SettingsService) -> None:
-        """Inicializa la pagina usando exclusivamente el servicio."""
+    profile_restored = Signal()
+
+    def __init__(
+        self,
+        service: SettingsService,
+        profile: PerfilAplicacion | None = None,
+        backup_service: ProfileBackupService | None = None,
+        backup_validator: BackupValidator | None = None,
+        restore_service: ProfileRestoreService | None = None,
+    ) -> None:
+        """Inicializa configuracion y acciones seguras del perfil activo."""
         super().__init__()
         self.service = service
+        self.profile = profile
+        self.backup_service = backup_service or ProfileBackupService()
+        self.backup_validator = backup_validator or BackupValidator()
+        self.restore_service = restore_service or ProfileRestoreService()
         self.reportes_input = QLineEdit()
         self.respaldo_input = QLineEdit()
         self.moneda_combo = QComboBox()
         self.apariencia_combo = QComboBox()
         self.cifrado_check = QCheckBox("Mantener reportes cifrados")
         self.sincronizacion_check = QCheckBox("Preparar sincronización futura")
+        self.create_backup_button = QPushButton("Crear respaldo ahora")
+        self.restore_backup_button = QPushButton("Restaurar respaldo...")
+        enabled = profile is not None
+        self.create_backup_button.setEnabled(enabled)
+        self.restore_backup_button.setEnabled(enabled)
         self.estado_label = QLabel("")
         self._build_ui()
         self.reload()
@@ -78,6 +100,135 @@ class SettingsPage(QWidget):
     def select_backup_folder(self) -> None:
         """Permite elegir carpeta de respaldo desde el sistema."""
         self._select_folder(self.respaldo_input, "Seleccionar respaldo")
+
+    def create_backup(self) -> None:
+        """Crea un respaldo verificado del perfil activo."""
+        if self.profile is None:
+            self._show_backup_error(
+                "No hay un perfil activo disponible para respaldar.",
+            )
+            return
+        try:
+            result = self.backup_service.crear_backup(
+                self.profile,
+                self.service,
+            )
+        except (ValueError, OSError, RuntimeError) as exc:
+            self._show_backup_error(str(exc))
+            return
+        self.estado_label.setText(f"Respaldo creado: {result.zip_path}")
+        QMessageBox.information(
+            self,
+            "Respaldo creado",
+            f"El respaldo se creó correctamente en:\n{result.zip_path}",
+        )
+
+    def restore_backup(self) -> None:
+        """Valida, confirma y restaura un ZIP sobre el perfil activo."""
+        if self.profile is None:
+            self._show_backup_error(
+                "No hay un perfil activo disponible para restaurar.",
+            )
+            return
+
+        selected, _ = QFileDialog.getOpenFileName(
+            self,
+            "Seleccionar respaldo",
+            self.respaldo_input.text() or str(Path.cwd()),
+            "Respaldos ZIP (*.zip)",
+        )
+        if not selected:
+            return
+
+        zip_path = Path(selected)
+        try:
+            validation = self.backup_validator.validar_backup(
+                zip_path,
+                expected_profile_id=self.profile.id,
+            )
+        except (ValueError, OSError, RuntimeError) as exc:
+            self._show_backup_error(str(exc))
+            return
+
+        if not validation.valid:
+            message = (
+                str(validation.error)
+                if validation.error is not None
+                else "El respaldo seleccionado no es válido."
+            )
+            self._show_backup_error(message)
+            return
+
+        response = QMessageBox.question(
+            self,
+            "Restaurar respaldo",
+            (
+                "La restauración reemplazará los datos administrados del "
+                "perfil activo para que coincidan con el respaldo.\n\n"
+                "Si el respaldo incluye reporte.key, también puede "
+                "reemplazar la unidad criptográfica de reportes.\n\n"
+                "¿Continuar con la restauración?"
+            ),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if response != QMessageBox.StandardButton.Yes:
+            return
+
+        try:
+            result = self.restore_service.restaurar(zip_path, self.profile)
+        except (ValueError, OSError, RuntimeError) as exc:
+            self._show_backup_error(str(exc))
+            return
+
+        if result.outcome == "APPLIED":
+            self.estado_label.setText("Respaldo restaurado correctamente.")
+            QMessageBox.information(
+                self,
+                "Restauración completada",
+                "El perfil activo fue restaurado correctamente.",
+            )
+            self.profile_restored.emit()
+            return
+
+        detail = (
+            str(result.error)
+            if result.error is not None
+            else "La restauración no pudo completarse."
+        )
+        if result.outcome == "FAILED_ROLLBACK_OK":
+            self.estado_label.setText(
+                "Restauración fallida; cambios revertidos correctamente.",
+            )
+            QMessageBox.warning(
+                self,
+                "Restauración revertida",
+                (
+                    f"{detail}\n\n"
+                    "Los cambios parciales fueron revertidos y el perfil "
+                    "conserva su estado anterior."
+                ),
+            )
+            return
+
+        self.estado_label.setText(
+            "Restauración fallida y rollback incompleto.",
+        )
+        evidence = (
+            f"\n\nEvidencia temporal: {result.staging_dir}"
+            if result.staging_dir is not None
+            else ""
+        )
+        QMessageBox.critical(
+            self,
+            "Restauración incompleta",
+            (
+                f"{detail}\n\n"
+                "No fue posible revertir por completo la restauración. "
+                "No continúe modificando el perfil hasta diagnosticarlo."
+                f"{evidence}"
+            ),
+        )
 
     def _build_ui(self) -> None:
         """Construye formulario y botones de accion."""
@@ -129,9 +280,28 @@ class SettingsPage(QWidget):
         )
         self.estado_label.setObjectName("MutedText")
 
+        backup_title = QLabel("Respaldo y restauración")
+        backup_title.setObjectName("SectionTitle")
+        backup_description = QLabel(
+            "Crea un ZIP verificado del perfil activo o restaura un respaldo "
+            "compatible. La restauración exige validación y confirmación.",
+        )
+        backup_description.setObjectName("MutedText")
+        backup_description.setWordWrap(True)
+        backup_actions = QHBoxLayout()
+        backup_actions.setSpacing(8)
+        self.create_backup_button.clicked.connect(self.create_backup)
+        self.restore_backup_button.clicked.connect(self.restore_backup)
+        backup_actions.addWidget(self.create_backup_button)
+        backup_actions.addWidget(self.restore_backup_button)
+        backup_actions.addStretch(1)
+
         layout.addWidget(title)
         layout.addWidget(subtitle)
         layout.addLayout(form)
+        layout.addWidget(backup_title)
+        layout.addWidget(backup_description)
+        layout.addLayout(backup_actions)
         layout.addWidget(self.estado_label)
         layout.addStretch(1)
         layout.addLayout(buttons)
@@ -190,3 +360,8 @@ class SettingsPage(QWidget):
         """Muestra errores de validacion generados por el servicio."""
         self.estado_label.setText(f"Error: {message}")
         QMessageBox.warning(self, "Configuración", message)
+
+    def _show_backup_error(self, message: str) -> None:
+        """Muestra un error de respaldo o restauración."""
+        self.estado_label.setText(f"Error: {message}")
+        QMessageBox.warning(self, "Respaldos", message)
