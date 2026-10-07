@@ -10,7 +10,9 @@ from types import SimpleNamespace
 import pytest
 from PySide6.QtWidgets import QApplication, QFileDialog, QMessageBox
 
+from core.models.backup import BackupValidationError, RestoreApplyError
 from services.backup_service import BackupValidator, ProfileBackupService
+from services.error_reporting_service import SafeErrorReporter
 from services.demo_profile_service import DemoProfileService
 from services.profile_restore_service import ProfileRestoreService
 from services.profile_service import PerfilAplicacion, ProfileService
@@ -111,6 +113,7 @@ def test_invalid_backup_is_rejected_before_restore(
     selected = tmp_path / "invalido.zip"
     restore_calls: list[Path] = []
     errors: list[str] = []
+    reporter = SafeErrorReporter(tmp_path / "logs")
     monkeypatch.setattr(
         QFileDialog,
         "getOpenFileName",
@@ -121,7 +124,9 @@ def test_invalid_backup_is_rejected_before_restore(
         "validar_backup",
         lambda *args, **kwargs: SimpleNamespace(
             valid=False,
-            error=ValueError("Respaldo inválido."),
+            error=BackupValidationError(
+                r"Respaldo inválido en C:\Users\Carlos\privado.zip",
+            ),
         ),
     )
     monkeypatch.setattr(
@@ -134,10 +139,16 @@ def test_invalid_backup_is_rejected_before_restore(
         profile=profile,
         backup_validator=validator,
         restore_service=restore_service,
+        error_reporter=reporter,
     )
     monkeypatch.setattr(page, "_show_backup_error", errors.append)
     page.restore_backup()
-    assert errors == ["Respaldo inválido."]
+    assert len(errors) == 1
+    assert errors[0].startswith(
+        "El respaldo seleccionado no es válido o no corresponde al perfil activo.",
+    )
+    assert "Código de incidente:" in errors[0]
+    assert "C:\\Users\\Carlos" not in errors[0]
     assert restore_calls == []
     page.deleteLater()
 
@@ -260,6 +271,7 @@ def test_successful_rollback_is_reported_as_safe_failure(
     restore_service = ProfileRestoreService()
     selected = tmp_path / "valido.zip"
     warnings: list[str] = []
+    reporter = SafeErrorReporter(tmp_path / "logs")
     monkeypatch.setattr(
         QFileDialog,
         "getOpenFileName",
@@ -285,7 +297,9 @@ def test_successful_rollback_is_reported_as_safe_failure(
         "restaurar",
         lambda *args, **kwargs: SimpleNamespace(
             outcome="FAILED_ROLLBACK_OK",
-            error=ValueError("Falla simulada."),
+            error=RestoreApplyError(
+                r"Falla simulada en C:\Users\Carlos\privado.json",
+            ),
             staging_dir=None,
         ),
     )
@@ -294,11 +308,14 @@ def test_successful_rollback_is_reported_as_safe_failure(
         profile=profile,
         backup_validator=validator,
         restore_service=restore_service,
+        error_reporter=reporter,
     )
     page.restore_backup()
     assert "revertidos correctamente" in page.estado_label.text()
     assert warnings
     assert "estado anterior" in warnings[0]
+    assert "Código de incidente:" in warnings[0]
+    assert "C:\\Users\\Carlos" not in warnings[0]
     page.deleteLater()
 
 
@@ -316,6 +333,7 @@ def test_failed_rollback_is_critical_and_preserves_evidence_path(
     selected = tmp_path / "valido.zip"
     staging = tmp_path / "staging_evidencia"
     critical: list[str] = []
+    reporter = SafeErrorReporter(tmp_path / "logs")
     monkeypatch.setattr(
         QFileDialog,
         "getOpenFileName",
@@ -341,7 +359,9 @@ def test_failed_rollback_is_critical_and_preserves_evidence_path(
         "restaurar",
         lambda *args, **kwargs: SimpleNamespace(
             outcome="FAILED_ROLLBACK_FAILED",
-            error=ValueError("Falla simulada."),
+            error=RestoreApplyError(
+                r"Falla simulada en C:\Users\Carlos\privado.json",
+            ),
             staging_dir=staging,
         ),
     )
@@ -350,11 +370,15 @@ def test_failed_rollback_is_critical_and_preserves_evidence_path(
         profile=profile,
         backup_validator=validator,
         restore_service=restore_service,
+        error_reporter=reporter,
     )
     page.restore_backup()
     assert "rollback incompleto" in page.estado_label.text()
     assert critical
-    assert str(staging) in critical[0]
+    assert str(staging) not in critical[0]
+    assert "Se conservó evidencia técnica local" in critical[0]
+    assert "Código de incidente:" in critical[0]
+    assert "C:\\Users\\Carlos" not in critical[0]
     page.deleteLater()
 
 

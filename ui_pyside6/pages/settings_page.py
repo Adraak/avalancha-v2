@@ -19,8 +19,10 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from core.models.backup import BackupError
 from core.models.configuracion import ConfiguracionAplicacion
 from services.backup_service import BackupValidator, ProfileBackupService
+from services.error_reporting_service import SafeErrorReporter
 from services.profile_restore_service import ProfileRestoreService
 from services.profile_service import PerfilAplicacion
 from services.settings_service import SettingsService
@@ -38,6 +40,7 @@ class SettingsPage(QWidget):
         backup_service: ProfileBackupService | None = None,
         backup_validator: BackupValidator | None = None,
         restore_service: ProfileRestoreService | None = None,
+        error_reporter: SafeErrorReporter | None = None,
     ) -> None:
         """Inicializa configuracion y acciones seguras del perfil activo."""
         super().__init__()
@@ -46,6 +49,7 @@ class SettingsPage(QWidget):
         self.backup_service = backup_service or ProfileBackupService()
         self.backup_validator = backup_validator or BackupValidator()
         self.restore_service = restore_service or ProfileRestoreService()
+        self.error_reporter = error_reporter or SafeErrorReporter()
         self.reportes_input = QLineEdit()
         self.respaldo_input = QLineEdit()
         self.moneda_combo = QComboBox()
@@ -70,8 +74,17 @@ class SettingsPage(QWidget):
         """Solicita al servicio validar y guardar configuracion."""
         try:
             config = self.service.guardar_configuracion(self._collect_data())
-        except (ValueError, OSError, RuntimeError) as exc:
+        except ValueError as exc:
             self._show_error(str(exc))
+            return
+        except (OSError, RuntimeError) as exc:
+            self._show_error(
+                self._technical_error(
+                    exc,
+                    context="settings.save",
+                    fallback="No fue posible guardar la configuración.",
+                ),
+            )
             return
         self._load_config(config)
         self.estado_label.setText("Configuración guardada.")
@@ -87,8 +100,17 @@ class SettingsPage(QWidget):
             return
         try:
             config = self.service.restaurar_valores_por_defecto()
-        except (ValueError, OSError, RuntimeError) as exc:
+        except ValueError as exc:
             self._show_error(str(exc))
+            return
+        except (OSError, RuntimeError) as exc:
+            self._show_error(
+                self._technical_error(
+                    exc,
+                    context="settings.defaults",
+                    fallback="No fue posible restaurar la configuración.",
+                ),
+            )
             return
         self._load_config(config)
         self.estado_label.setText("Valores por defecto restaurados.")
@@ -113,8 +135,14 @@ class SettingsPage(QWidget):
                 self.profile,
                 self.service,
             )
-        except (ValueError, OSError, RuntimeError) as exc:
-            self._show_backup_error(str(exc))
+        except (BackupError, ValueError, OSError, RuntimeError) as exc:
+            self._show_backup_error(
+                self._technical_error(
+                    exc,
+                    context="settings.backup.create",
+                    fallback="No fue posible crear el respaldo.",
+                ),
+            )
             return
         self.estado_label.setText(f"Respaldo creado: {result.zip_path}")
         QMessageBox.information(
@@ -146,16 +174,28 @@ class SettingsPage(QWidget):
                 zip_path,
                 expected_profile_id=self.profile.id,
             )
-        except (ValueError, OSError, RuntimeError) as exc:
-            self._show_backup_error(str(exc))
+        except (BackupError, ValueError, OSError, RuntimeError) as exc:
+            self._show_backup_error(
+                self._technical_error(
+                    exc,
+                    context="settings.backup.validate",
+                    fallback="No fue posible validar el respaldo seleccionado.",
+                ),
+            )
             return
 
         if not validation.valid:
-            message = (
-                str(validation.error)
-                if validation.error is not None
-                else "El respaldo seleccionado no es válido."
-            )
+            if validation.error is None:
+                message = "El respaldo seleccionado no es válido."
+            else:
+                message = self._technical_error(
+                    validation.error,
+                    context="settings.backup.invalid",
+                    fallback=(
+                        "El respaldo seleccionado no es válido o no "
+                        "corresponde al perfil activo."
+                    ),
+                )
             self._show_backup_error(message)
             return
 
@@ -177,8 +217,14 @@ class SettingsPage(QWidget):
 
         try:
             result = self.restore_service.restaurar(zip_path, self.profile)
-        except (ValueError, OSError, RuntimeError) as exc:
-            self._show_backup_error(str(exc))
+        except (BackupError, ValueError, OSError, RuntimeError) as exc:
+            self._show_backup_error(
+                self._technical_error(
+                    exc,
+                    context="settings.restore.execute",
+                    fallback="No fue posible restaurar el respaldo.",
+                ),
+            )
             return
 
         if result.outcome == "APPLIED":
@@ -192,7 +238,11 @@ class SettingsPage(QWidget):
             return
 
         detail = (
-            str(result.error)
+            self._technical_error(
+                result.error,
+                context="settings.restore.result",
+                fallback="La restauración no pudo completarse.",
+            )
             if result.error is not None
             else "La restauración no pudo completarse."
         )
@@ -215,7 +265,7 @@ class SettingsPage(QWidget):
             "Restauración fallida y rollback incompleto.",
         )
         evidence = (
-            f"\n\nEvidencia temporal: {result.staging_dir}"
+            "\n\nSe conservó evidencia técnica local para diagnóstico."
             if result.staging_dir is not None
             else ""
         )
@@ -365,3 +415,18 @@ class SettingsPage(QWidget):
         """Muestra un error de respaldo o restauración."""
         self.estado_label.setText(f"Error: {message}")
         QMessageBox.warning(self, "Respaldos", message)
+
+    def _technical_error(
+        self,
+        exc: BaseException,
+        *,
+        context: str,
+        fallback: str,
+    ) -> str:
+        """Registra un fallo técnico sin exponer su contenido crudo."""
+        notice = self.error_reporter.report(
+            exc,
+            context=context,
+            user_message=fallback,
+        )
+        return notice.message

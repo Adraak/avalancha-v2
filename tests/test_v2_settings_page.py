@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
 )
 
 from core.models.configuracion import ConfiguracionAplicacion
+from services.error_reporting_service import SafeErrorReporter
 from services.settings_service import SettingsService
 from ui_pyside6.pages.settings_page import SettingsPage
 
@@ -207,18 +208,29 @@ def test_settings_page_does_not_import_storage_directly() -> None:
 
 def test_settings_page_handles_service_error(
     app: QApplication,
+    tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Muestra error comprensible si falla el servicio."""
+    """Muestra un incidente seguro si falla técnicamente el servicio."""
     _ = app
     service = FailingSettingsService()
-    page = SettingsPage(service)  # type: ignore[arg-type]
+    reporter = SafeErrorReporter(tmp_path / "logs")
+    page = SettingsPage(  # type: ignore[arg-type]
+        service,
+        error_reporter=reporter,
+    )
     errors: list[str] = []
     monkeypatch.setattr(page, "_show_error", errors.append)
 
     page.save()
 
-    assert errors == ["Falla controlada del servicio."]
+    assert len(errors) == 1
+    assert errors[0].startswith("No fue posible guardar la configuración.")
+    assert "Código de incidente:" in errors[0]
+    assert "Falla controlada del servicio." not in errors[0]
+    assert "Falla controlada del servicio." not in reporter.log_path.read_text(
+        encoding="utf-8",
+    )
     assert service.saved_payload is not None
     page.deleteLater()
 
