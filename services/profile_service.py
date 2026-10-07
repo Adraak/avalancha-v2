@@ -18,6 +18,8 @@ PERFIL_PERSONAL = "personal"
 PERFIL_DEMO = "demo_avalancha"
 
 from services.error_reporting_service import UserFacingError
+from services.runtime_paths import RuntimePaths
+
 
 @dataclass(frozen=True, slots=True)
 class PerfilAplicacion:
@@ -54,16 +56,48 @@ class ProfileService:
 
     def __init__(
         self,
-        profiles_root: str | Path = "data/perfiles",
-        legacy_data_dir: str | Path = "data",
-        legacy_reports_dir: str | Path = "reportes",
-        legacy_config_dir: str | Path = "config",
+        profiles_root: str | Path | None = None,
+        legacy_data_dir: str | Path | None = None,
+        legacy_reports_dir: str | Path | None = None,
+        legacy_config_dir: str | Path | None = None,
     ) -> None:
         """Inicializa registro y asegura el perfil personal."""
-        self.profiles_root = Path(profiles_root)
-        self.legacy_data_dir = Path(legacy_data_dir)
-        self.legacy_reports_dir = Path(legacy_reports_dir)
-        self.legacy_config_dir = Path(legacy_config_dir)
+        use_runtime_defaults = all(
+            value is None
+            for value in (
+                profiles_root,
+                legacy_data_dir,
+                legacy_reports_dir,
+                legacy_config_dir,
+            )
+        )
+        if use_runtime_defaults:
+            runtime_paths = RuntimePaths.current()
+            self.profiles_root = runtime_paths.profiles_root
+            self.legacy_data_dir = runtime_paths.legacy_data_dir
+            self.legacy_reports_dir = runtime_paths.legacy_reports_dir
+            self.legacy_config_dir = runtime_paths.legacy_config_dir
+        else:
+            self.profiles_root = (
+                Path(profiles_root)
+                if profiles_root is not None
+                else Path("data/perfiles")
+            )
+            self.legacy_data_dir = (
+                Path(legacy_data_dir)
+                if legacy_data_dir is not None
+                else Path("data")
+            )
+            self.legacy_reports_dir = (
+                Path(legacy_reports_dir)
+                if legacy_reports_dir is not None
+                else Path("reportes")
+            )
+            self.legacy_config_dir = (
+                Path(legacy_config_dir)
+                if legacy_config_dir is not None
+                else Path("config")
+            )
         self.registry_path = self.profiles_root / "perfiles.json"
         self.active_path = self.profiles_root / "perfil_activo.json"
         self.profiles_root.mkdir(parents=True, exist_ok=True)
