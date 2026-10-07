@@ -26,6 +26,7 @@ env/
 build/
 dist/
 *.spec
+!packaging/*.spec
 
 # Datos reales del usuario.
 data/
