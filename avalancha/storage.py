@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import shutil
 from datetime import datetime
 from pathlib import Path
@@ -17,6 +16,7 @@ from avalancha.models import (
     now_iso,
     validate_month,
 )
+from core.json_file_store import JsonFileStore
 from core.models.monthly_closure import MonthlyClosure
 
 
@@ -30,6 +30,7 @@ class BudgetRepository:
         """Inicializa las carpetas de datos y respaldos internos."""
         self.data_dir = Path(data_dir)
         self.backup_dir = self.data_dir / "backups"
+        self._json_store = JsonFileStore()
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self.backup_dir.mkdir(parents=True, exist_ok=True)
 
@@ -69,8 +70,7 @@ class BudgetRepository:
         if not path.exists():
             return MonthlyBudget.empty(year, month)
 
-        with path.open("r", encoding="utf-8") as file:
-            data = json.load(file)
+        data = self._json_store.read(path)
         return MonthlyBudget.from_dict(data)
 
     def load_or_create_from_previous(
@@ -110,15 +110,10 @@ class BudgetRepository:
             shutil.copy2(path, self._backup_path(path))
 
         budget.touch()
-        with path.open("w", encoding="utf-8") as file:
-            json.dump(
-                budget.to_dict(),
-                file,
-                ensure_ascii=False,
-                indent=2,
-                sort_keys=True,
-            )
-            file.write("\n")
+        self._json_store.write(
+            path,
+            budget.to_dict(),
+        )
         return path
 
     def list_months(self) -> list[str]:
@@ -146,8 +141,7 @@ class BudgetRepository:
         if not path.exists():
             return []
 
-        with path.open("r", encoding="utf-8") as file:
-            data = json.load(file)
+        data = self._json_store.read(path)
         return [Debt.from_dict(item) for item in data.get("debts", [])]
 
     def save_debts(self, debts: list[Debt]) -> Path:
@@ -156,15 +150,10 @@ class BudgetRepository:
         if path.exists():
             shutil.copy2(path, self._backup_path(path))
 
-        with path.open("w", encoding="utf-8") as file:
-            json.dump(
-                {"debts": [item.to_dict() for item in debts]},
-                file,
-                ensure_ascii=False,
-                indent=2,
-                sort_keys=True,
-            )
-            file.write("\n")
+        self._json_store.write(
+            path,
+            {"debts": [item.to_dict() for item in debts]},
+        )
         return path
 
     def load_debt_payments(self) -> list[DebtPayment]:
@@ -173,8 +162,7 @@ class BudgetRepository:
         if not path.exists():
             return []
 
-        with path.open("r", encoding="utf-8") as file:
-            data = json.load(file)
+        data = self._json_store.read(path)
         return [
             DebtPayment.from_dict(item)
             for item in data.get("debt_payments", [])
@@ -189,15 +177,10 @@ class BudgetRepository:
         if path.exists():
             shutil.copy2(path, self._backup_path(path))
 
-        with path.open("w", encoding="utf-8") as file:
-            json.dump(
-                {"debt_payments": [item.to_dict() for item in payments]},
-                file,
-                ensure_ascii=False,
-                indent=2,
-                sort_keys=True,
-            )
-            file.write("\n")
+        self._json_store.write(
+            path,
+            {"debt_payments": [item.to_dict() for item in payments]},
+        )
         return path
 
     def load_debt_snapshots(self) -> list[DebtSnapshot]:
@@ -206,8 +189,7 @@ class BudgetRepository:
         if not path.exists():
             return []
 
-        with path.open("r", encoding="utf-8") as file:
-            data = json.load(file)
+        data = self._json_store.read(path)
         return [
             DebtSnapshot.from_dict(item)
             for item in data.get("debt_snapshots", [])
@@ -222,15 +204,10 @@ class BudgetRepository:
         if path.exists():
             shutil.copy2(path, self._backup_path(path))
 
-        with path.open("w", encoding="utf-8") as file:
-            json.dump(
-                {"debt_snapshots": [item.to_dict() for item in snapshots]},
-                file,
-                ensure_ascii=False,
-                indent=2,
-                sort_keys=True,
-            )
-            file.write("\n")
+        self._json_store.write(
+            path,
+            {"debt_snapshots": [item.to_dict() for item in snapshots]},
+        )
         return path
 
     def load_accounts(self) -> list[CuentaFinanciera]:
@@ -238,8 +215,7 @@ class BudgetRepository:
         path = self.accounts_path
         if not path.exists():
             return []
-        with path.open("r", encoding="utf-8") as file:
-            data = json.load(file)
+        data = self._json_store.read(path)
         return [
             CuentaFinanciera.from_dict(item)
             for item in data.get("accounts", [])
@@ -250,15 +226,10 @@ class BudgetRepository:
         path = self.accounts_path
         if path.exists():
             shutil.copy2(path, self._backup_path(path))
-        with path.open("w", encoding="utf-8") as file:
-            json.dump(
-                {"accounts": [item.to_dict() for item in accounts]},
-                file,
-                ensure_ascii=False,
-                indent=2,
-                sort_keys=True,
-            )
-            file.write("\n")
+        self._json_store.write(
+            path,
+            {"accounts": [item.to_dict() for item in accounts]},
+        )
         return path
 
     def load_monthly_closures(self) -> list[MonthlyClosure]:
@@ -267,8 +238,7 @@ class BudgetRepository:
         if not path.exists():
             return []
 
-        with path.open("r", encoding="utf-8") as file:
-            data = json.load(file)
+        data = self._json_store.read(path)
         return [
             MonthlyClosure.from_dict(item)
             for item in data.get("monthly_closures", [])
@@ -283,19 +253,14 @@ class BudgetRepository:
         if path.exists():
             shutil.copy2(path, self._backup_path(path))
 
-        with path.open("w", encoding="utf-8") as file:
-            json.dump(
-                {
-                    "monthly_closures": [
-                        item.to_dict() for item in closures
-                    ],
-                },
-                file,
-                ensure_ascii=False,
-                indent=2,
-                sort_keys=True,
-            )
-            file.write("\n")
+        self._json_store.write(
+            path,
+            {
+                "monthly_closures": [
+                    item.to_dict() for item in closures
+                ],
+            },
+        )
         return path
 
     @staticmethod
@@ -358,8 +323,7 @@ class BudgetRepository:
             label = path.stem.replace("presupuesto_", "")
             if overlay_label and label == overlay_label:
                 continue
-            with path.open("r", encoding="utf-8") as file:
-                budget = MonthlyBudget.from_dict(json.load(file))
+            budget = MonthlyBudget.from_dict(self._json_store.read(path))
             self._accumulate_debt_payments(budget, totals)
 
         if overlay_budget is not None:

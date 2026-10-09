@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import unicodedata
 from datetime import datetime
 from pathlib import Path
@@ -11,6 +10,7 @@ from uuid import uuid4
 
 from avalancha.models import EXPENSE, INCOME
 from avalancha.storage import BudgetRepository
+from core.json_file_store import JsonFileStore
 from core.models.categoria import (
     CLASES_CATEGORIA,
     TIPOS_CATEGORIA,
@@ -69,6 +69,7 @@ class CategoryService:
         self.repository = repository or BudgetRepository(data_dir)
         self.data_dir = self.repository.data_dir
         self.categories_path = self.data_dir / "categorias.json"
+        self._json_store = JsonFileStore()
 
     def listar_categorias(self) -> list[Categoria]:
         """Devuelve todas las categorias conocidas del perfil."""
@@ -261,8 +262,7 @@ class CategoryService:
             self._save(categorias)
             return categorias
 
-        with self.categories_path.open("r", encoding="utf-8") as file:
-            data = json.load(file)
+        data = self._json_store.read(self.categories_path)
         raw_categories = data.get("categories", [])
         categorias = []
         if isinstance(raw_categories, list):
@@ -285,9 +285,7 @@ class CategoryService:
                 )
             ]
         }
-        with self.categories_path.open("w", encoding="utf-8") as file:
-            json.dump(data, file, ensure_ascii=False, indent=2, sort_keys=True)
-            file.write("\n")
+        self._json_store.write(self.categories_path, data)
 
     def _validar_categoria(
         self,

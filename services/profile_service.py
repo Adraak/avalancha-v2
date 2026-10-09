@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import shutil
 import unicodedata
 from dataclasses import dataclass
@@ -17,6 +16,7 @@ from avalancha.storage import BudgetRepository
 PERFIL_PERSONAL = "personal"
 PERFIL_DEMO = "demo_avalancha"
 
+from core.json_file_store import JsonFileStore
 from services.error_reporting_service import UserFacingError
 from services.runtime_paths import RuntimePaths
 
@@ -332,17 +332,14 @@ class ProfileService:
         """Lee JSON de forma tolerante."""
         if not path.exists():
             return default
-        with path.open("r", encoding="utf-8") as file:
-            data = json.load(file)
+        data = JsonFileStore().read(path)
         return data if isinstance(data, dict) else default
 
     @staticmethod
     def _write_json(path: Path, data: dict[str, Any]) -> None:
         """Escribe JSON con formato estable."""
         path.parent.mkdir(parents=True, exist_ok=True)
-        with path.open("w", encoding="utf-8") as file:
-            json.dump(data, file, ensure_ascii=False, indent=2, sort_keys=True)
-            file.write("\n")
+        JsonFileStore().write(path, data)
 
     @staticmethod
     def _copy_if_missing(source: Path, target: Path) -> None:

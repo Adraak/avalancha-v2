@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass
 from datetime import date, datetime
 from pathlib import Path
@@ -11,6 +10,7 @@ from uuid import uuid4
 from avalancha.models import CategoryBudget, EXPENSE
 from avalancha.storage import BudgetRepository
 
+from core.json_file_store import JsonFileStore
 from core.models.presupuesto import Presupuesto
 from services.error_reporting_service import UserFacingError
 from services.category_service import CategoryService
@@ -46,6 +46,7 @@ class BudgetService:
         self.year = year or today.year
         self.month = month or today.month
         self.repository = repository or BudgetRepository(data_dir)
+        self._json_store = JsonFileStore()
         self.category_service = category_service or CategoryService(
             data_dir=self.repository.data_dir,
             repository=self.repository,
@@ -251,23 +252,14 @@ class BudgetService:
         path = self.repository.budget_path(self.year, self.month)
         if not path.exists():
             return False
-        with path.open("r", encoding="utf-8") as file:
-            data = json.load(file)
+        data = self._json_store.read(path)
         changed = False
         for item in data.get("categories", []):
             if not item.get("budget_id"):
                 item["budget_id"] = uuid4().hex
                 changed = True
         if changed:
-            with path.open("w", encoding="utf-8") as file:
-                json.dump(
-                    data,
-                    file,
-                    ensure_ascii=False,
-                    indent=2,
-                    sort_keys=True,
-                )
-                file.write("\n")
+            self._json_store.write(path, data)
         return changed
 
     def _find_category(self, presupuesto_id: str) -> CategoryBudget:

@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Any
 
+from core.json_file_store import JsonFileStore
 from core.models.configuracion import ConfiguracionAplicacion
 
 
@@ -27,6 +27,7 @@ class SettingsService:
         self.reports_dir = Path(reports_dir)
         self.backup_dir = Path(backup_dir)
         self.settings_path = self.config_dir / self.ARCHIVO_CONFIGURACION
+        self._json_store = JsonFileStore()
 
     def cargar_configuracion(self) -> ConfiguracionAplicacion:
         """Carga configuracion persistida o devuelve valores por defecto."""
@@ -51,15 +52,7 @@ class SettingsService:
         config = self._validar_configuracion(config)
         self._crear_carpetas_configuradas(config)
         self.config_dir.mkdir(parents=True, exist_ok=True)
-        with self.settings_path.open("w", encoding="utf-8") as file:
-            json.dump(
-                config.to_dict(),
-                file,
-                ensure_ascii=False,
-                indent=2,
-                sort_keys=True,
-            )
-            file.write("\n")
+        self._json_store.write(self.settings_path, config.to_dict())
         return config
 
     def restaurar_valores_por_defecto(self) -> ConfiguracionAplicacion:
@@ -157,6 +150,5 @@ class SettingsService:
         """Lee el archivo de configuracion de forma tolerante."""
         if not self.settings_path.exists():
             return {}
-        with self.settings_path.open("r", encoding="utf-8") as file:
-            data = json.load(file)
+        data = self._json_store.read(self.settings_path)
         return data if isinstance(data, dict) else {}
