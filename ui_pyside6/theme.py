@@ -18,10 +18,53 @@ COLOR_MENU_HOVER = "#10233a"
 COLOR_MENU_TEXTO = "#d8e3ee"
 COLOR_MENU_ACTIVO_TEXTO = "#ffffff"
 FUENTE_BASE = "Segoe UI"
+LIGHT_THEME = "light"
 
 
-def hoja_estilos() -> str:
-    """Devuelve la hoja de estilos principal de PySide6."""
+class ThemeStyleSheet:
+    """Entrega estilos acotados para componentes del tema claro oficial."""
+
+    @staticmethod
+    def about_dialog(theme_variant: str = LIGHT_THEME) -> str:
+        """Devuelve colores legibles para el dialogo institucional."""
+        if theme_variant != LIGHT_THEME:
+            raise ValueError(f"Variante de tema no soportada: {theme_variant}")
+        background = "#f3f5f7"
+        text = "#111318"
+        muted = "#596574"
+        button = "#ffffff"
+        hover = "#e8edf3"
+        border = "#b8c2cc"
+
+        return f"""
+        #AboutDialog {{
+            background: {background};
+        }}
+        #AboutDialog QLabel {{
+            color: {text};
+        }}
+        #AboutDialog #InstitutionalWebsite,
+        #AboutDialog #InstitutionalEmail,
+        #AboutDialog #AboutVersion {{
+            color: {muted};
+        }}
+        #AboutDialog QPushButton {{
+            background: {button};
+            color: {text};
+            border: 1px solid {border};
+            border-radius: 7px;
+            padding: 7px 11px;
+        }}
+        #AboutDialog QPushButton:hover {{
+            background: {hover};
+        }}
+        """
+
+
+def hoja_estilos(theme_variant: str = LIGHT_THEME) -> str:
+    """Devuelve la hoja de estilos principal del tema claro oficial."""
+    if theme_variant != LIGHT_THEME:
+        raise ValueError(f"Variante de tema no soportada: {theme_variant}")
     return f"""
     QMainWindow {{
         background: {COLOR_FONDO};
@@ -64,7 +107,7 @@ def hoja_estilos() -> str:
         color: {COLOR_MENU_TEXTO};
         border: none;
         border-radius: 9px;
-        padding: 12px 14px;
+        padding: 11px 14px;
         text-align: left;
         font-size: 13px;
         font-weight: 600;
@@ -77,6 +120,36 @@ def hoja_estilos() -> str:
     QPushButton[menuButton="true"]:checked {{
         background: {COLOR_MENU_ACTIVO};
         color: {COLOR_MENU_ACTIVO_TEXTO};
+    }}
+
+    #SideMenuScroll,
+    #SideMenuList,
+    #HelpScroll,
+    #HelpContent {{
+        background: transparent;
+        border: none;
+    }}
+
+    #SideMenuScroll QScrollBar:vertical {{
+        background: transparent;
+        width: 6px;
+        margin: 0;
+    }}
+
+    #SideMenuScroll QScrollBar::handle:vertical {{
+        background: #2a4563;
+        border-radius: 3px;
+        min-height: 24px;
+    }}
+
+    #SideMenuScroll QScrollBar::add-line:vertical,
+    #SideMenuScroll QScrollBar::sub-line:vertical {{
+        height: 0;
+    }}
+
+    #SideMenuScroll QScrollBar::add-page:vertical,
+    #SideMenuScroll QScrollBar::sub-page:vertical {{
+        background: transparent;
     }}
 
     QPushButton[secondaryButton="true"] {{
@@ -110,6 +183,30 @@ def hoja_estilos() -> str:
         color: {COLOR_TEXTO_SUAVE};
     }}
 
+    #SupportCard {{
+        background: {COLOR_PANEL};
+        border: 1px solid {COLOR_BORDE};
+        border-radius: 12px;
+    }}
+
+    #SupportProductTitle {{
+        font-size: 26px;
+        font-weight: 700;
+        color: {COLOR_TEXTO};
+    }}
+
+    #SupportVersion,
+    #InstitutionalWebsite,
+    #InstitutionalEmail {{
+        color: {COLOR_TEXTO_SUAVE};
+    }}
+
+    #InstitutionalBrandingText {{
+        font-size: 14px;
+        font-weight: 600;
+        color: {COLOR_TEXTO};
+    }}
+
     #StatusBar {{
         background: {COLOR_PANEL};
         border-top: 1px solid {COLOR_BORDE};
@@ -118,5 +215,11 @@ def hoja_estilos() -> str:
     #StatusText {{
         color: {COLOR_TEXTO_SUAVE};
         font-size: 12px;
+    }}
+
+    #InstitutionalStatusText {{
+        color: {COLOR_TEXTO_SUAVE};
+        font-size: 12px;
+        font-weight: 600;
     }}
     """

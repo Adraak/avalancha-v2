@@ -303,7 +303,6 @@ class SettingsPage(QWidget):
             self.select_reports_folder,
         ))
         form.addRow("Moneda principal", self.moneda_combo)
-        form.addRow("Apariencia", self.apariencia_combo)
         form.addRow("Cifrado", self.cifrado_check)
         form.addRow("Carpeta de respaldo", self._folder_row(
             self.respaldo_input,

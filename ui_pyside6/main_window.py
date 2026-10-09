@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QMainWindow,
     QPushButton,
+    QScrollArea,
     QStackedWidget,
     QVBoxLayout,
     QWidget,
@@ -28,18 +29,20 @@ from services.profile_service import PERFIL_DEMO, ProfileService
 from services.reconciliation_service import ReconciliationService
 from services.report_service import ReportService
 from services.settings_service import SettingsService
+from ui_pyside6.branding import ExternalLinkLauncher, InstitutionalBranding
 from ui_pyside6.pages.accounts_page import AccountsPage
 from ui_pyside6.pages.budgets_page import BudgetsPage
 from ui_pyside6.pages.categories_page import CategoriesPage
 from ui_pyside6.pages.dashboard_page import DashboardPage
 from ui_pyside6.pages.debts_page import DebtsPage
+from ui_pyside6.pages.help_page import HelpPage
 from ui_pyside6.pages.monthly_closure_page import MonthlyClosurePage
 from ui_pyside6.pages.movements_page import MovementsPage
 from ui_pyside6.pages.profiles_page import ProfilesPage
 from ui_pyside6.pages.reconciliation_page import ReconciliationPage
 from ui_pyside6.pages.reports_page import ReportsPage
 from ui_pyside6.pages.settings_page import SettingsPage
-from ui_pyside6.theme import hoja_estilos
+from ui_pyside6.theme import LIGHT_THEME, hoja_estilos
 
 
 @dataclass(frozen=True)
@@ -63,7 +66,6 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("Avalancha V2")
         self.resize(1200, 750)
         self.setMinimumSize(980, 640)
-        self.setStyleSheet(hoja_estilos())
         self.profile_service = profile_service or ProfileService()
         self.demo_service = demo_service or DemoProfileService(
             self.profile_service,
@@ -71,14 +73,34 @@ class MainWindow(QMainWindow):
         self._ensure_active_demo_data()
         self.active_profile = self.profile_service.obtener_activo()
         self.profile_name = self.active_profile.nombre
+        self.settings_service = self._create_settings_service()
+        self.help_page: HelpPage | None = None
+        self.current_theme = LIGHT_THEME
+        self.setStyleSheet(hoja_estilos())
         self.navigation_buttons: list[QPushButton] = []
         self.button_group = QButtonGroup(self)
         self.button_group.setExclusive(True)
         self.stack = QStackedWidget()
         self.active_section_label = QLabel()
         self.profile_label = QLabel()
+        self.link_launcher = ExternalLinkLauncher()
         self._build_ui()
         self._select_section(0)
+
+    def _apply_theme(self) -> None:
+        """Aplica la apariencia clara oficial de Avalancha."""
+        self.current_theme = LIGHT_THEME
+        self.setStyleSheet(hoja_estilos())
+        if self.help_page is not None:
+            self.help_page.set_theme_variant(LIGHT_THEME)
+
+    def _create_settings_service(self) -> SettingsService:
+        """Crea el servicio canonico de preferencias del perfil activo."""
+        return SettingsService(
+            config_dir=self.active_profile.config_dir,
+            reports_dir=self.active_profile.reports_dir,
+            backup_dir=self.active_profile.raiz / "backup",
+        )
 
     def _ensure_active_demo_data(self) -> None:
         """Asegura datos demo completos si el perfil activo es Demo."""
@@ -145,8 +167,14 @@ class MainWindow(QMainWindow):
         menu.setFixedWidth(210)
 
         layout = QVBoxLayout(menu)
-        layout.setContentsMargins(14, 20, 14, 20)
+        layout.setContentsMargins(14, 12, 14, 12)
         layout.setSpacing(8)
+
+        navigation = QWidget()
+        navigation.setObjectName("SideMenuList")
+        navigation_layout = QVBoxLayout(navigation)
+        navigation_layout.setContentsMargins(0, 0, 0, 0)
+        navigation_layout.setSpacing(4)
 
         for index, item in enumerate(self._navigation_items()):
             button = QPushButton(item.name)
@@ -161,9 +189,19 @@ class MainWindow(QMainWindow):
             self.button_group.addButton(button, index)
             self.navigation_buttons.append(button)
             self.stack.addWidget(item.widget)
-            layout.addWidget(button)
+            navigation_layout.addWidget(button)
 
-        layout.addStretch(1)
+        navigation_layout.addStretch(1)
+        self.navigation_scroll = QScrollArea()
+        self.navigation_scroll.setObjectName("SideMenuScroll")
+        self.navigation_scroll.setWidgetResizable(True)
+        self.navigation_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        self.navigation_scroll.setHorizontalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAlwaysOff,
+        )
+        self.navigation_scroll.setWidget(navigation)
+
+        layout.addWidget(self.navigation_scroll, stretch=1)
         layout.addWidget(self._build_profile_badge())
         return menu
 
@@ -171,6 +209,7 @@ class MainWindow(QMainWindow):
         """Construye bloque inferior con perfil activo."""
         badge = QFrame()
         badge.setObjectName("ProfileBadge")
+        badge.setMinimumHeight(46)
         badge.setStyleSheet(
             """
             #ProfileBadge {
@@ -180,17 +219,17 @@ class MainWindow(QMainWindow):
             }
             """
         )
-        layout = QVBoxLayout(badge)
-        layout.setContentsMargins(12, 10, 12, 10)
-        layout.setSpacing(3)
+        layout = QHBoxLayout(badge)
+        layout.setContentsMargins(12, 8, 12, 8)
+        layout.setSpacing(6)
 
-        label = QLabel("Perfil activo")
+        label = QLabel("Perfil:")
         label.setStyleSheet("color: #9fb2c7; font-size: 11px;")
         value = QLabel(self.profile_name)
-        value.setStyleSheet("color: #ffffff; font-size: 13px; font-weight: 700;")
+        value.setStyleSheet("color: #ffffff; font-size: 12px; font-weight: 700;")
 
         layout.addWidget(label)
-        layout.addWidget(value)
+        layout.addWidget(value, stretch=1)
         return badge
 
     def _build_content_area(self) -> QWidget:
@@ -220,15 +259,15 @@ class MainWindow(QMainWindow):
         left = QLabel("Estado: Listo")
         left.setObjectName("StatusText")
 
-        version = QLabel("Avalancha V2 - PySide6")
-        version.setObjectName("StatusText")
-        version.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        branding = QLabel(InstitutionalBranding.PRODUCT_TEXT)
+        branding.setObjectName("InstitutionalStatusText")
+        branding.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         self.active_section_label.setObjectName("StatusText")
         self.active_section_label.setAlignment(Qt.AlignmentFlag.AlignRight)
 
         layout.addWidget(left)
-        layout.addWidget(version, stretch=1)
+        layout.addWidget(branding, stretch=1)
         layout.addWidget(self.active_section_label)
         return status
 
@@ -262,12 +301,7 @@ class MainWindow(QMainWindow):
             year=year,
             month=month,
         )
-        settings_service = SettingsService(
-            config_dir=profile.config_dir,
-            reports_dir=profile.reports_dir,
-            backup_dir=profile.raiz / "backup",
-        )
-        settings = settings_service.cargar_configuracion()
+        settings = self.settings_service.cargar_configuracion()
         report_service = ReportService(
             data_dir=data_dir,
             reports_dir=settings.carpeta_reportes,
@@ -290,10 +324,14 @@ class MainWindow(QMainWindow):
         )
         profiles_page.profile_changed.connect(self._reload_profile)
         settings_page = SettingsPage(
-            settings_service,
+            self.settings_service,
             profile=profile,
         )
         settings_page.profile_restored.connect(self._reload_profile)
+        self.help_page = HelpPage(
+            link_launcher=self.link_launcher,
+            theme_variant=self.current_theme,
+        )
         return [
             NavigationItem(
                 "Resumen",
@@ -335,6 +373,7 @@ class MainWindow(QMainWindow):
             ),
             NavigationItem("Perfiles", profiles_page),
             NavigationItem("Configuración", settings_page),
+            NavigationItem("Ayuda y soporte", self.help_page),
         ]
 
     def _select_section(self, index: int) -> None:
@@ -344,6 +383,7 @@ class MainWindow(QMainWindow):
         self.stack.setCurrentIndex(index)
         button = self.navigation_buttons[index]
         button.setChecked(True)
+        self.navigation_scroll.ensureWidgetVisible(button, 0, 0)
         section = button.text()
         self.active_section_label.setText(f"Sección activa: {section}")
         self._refresh_widget(self.stack.currentWidget())
@@ -381,6 +421,9 @@ class MainWindow(QMainWindow):
         current_index = self.stack.currentIndex()
         self.active_profile = self.profile_service.obtener_activo()
         self.profile_name = self.active_profile.nombre
+        self.settings_service = self._create_settings_service()
+        self.help_page = None
+        self._apply_theme()
         self.navigation_buttons = []
         self.button_group = QButtonGroup(self)
         self.button_group.setExclusive(True)

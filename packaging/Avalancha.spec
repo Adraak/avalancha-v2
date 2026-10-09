@@ -4,12 +4,19 @@ from pathlib import Path
 
 
 project_root = Path.cwd()
+branding_directory = project_root / "assets" / "branding" / "antisimetria"
+branding_datas = [
+    (
+        str(branding_directory / "antisimetria_logo_light.png"),
+        "assets/branding/antisimetria",
+    ),
+]
 
 analysis = Analysis(
     [str(project_root / "main_v2.py")],
     pathex=[str(project_root)],
     binaries=[],
-    datas=[],
+    datas=branding_datas,
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},
