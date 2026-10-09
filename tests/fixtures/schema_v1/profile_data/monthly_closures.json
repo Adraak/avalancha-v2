@@ -1,0 +1,36 @@
+{
+  "monthly_closures": [
+    {
+      "accounts_reconciled": true,
+      "budgets_reviewed": true,
+      "closed_at": "2026-03-01T10:00:00",
+      "closure_id": "cie00000000000000000000000000001",
+      "created_at": "2026-02-27T09:00:00",
+      "debts_reviewed": true,
+      "id": "cie00000000000000000000000000001",
+      "month": 2,
+      "movements_reviewed": true,
+      "notes": "Cierre de ejemplo",
+      "report_generated": true,
+      "status": "cerrado",
+      "updated_at": "2026-03-01T10:00:00",
+      "year": 2026
+    },
+    {
+      "accounts_reconciled": false,
+      "budgets_reviewed": false,
+      "closed_at": null,
+      "closure_id": "cie00000000000000000000000000002",
+      "created_at": "2026-03-30T09:00:00",
+      "debts_reviewed": false,
+      "id": "cie00000000000000000000000000002",
+      "month": 3,
+      "movements_reviewed": true,
+      "notes": "",
+      "report_generated": false,
+      "status": "pendiente_cierre",
+      "updated_at": "2026-03-30T09:05:00",
+      "year": 2026
+    }
+  ]
+}

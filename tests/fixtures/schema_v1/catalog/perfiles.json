@@ -1,0 +1,12 @@
+{
+  "perfiles": [
+    {
+      "nombre": "Hogar Ficticio",
+      "slug": "hogar_ficticio"
+    },
+    {
+      "nombre": "Personal",
+      "slug": "personal"
+    }
+  ]
+}

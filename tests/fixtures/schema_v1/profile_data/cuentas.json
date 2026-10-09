@@ -1,0 +1,40 @@
+{
+  "accounts": [
+    {
+      "account_id": "acc00000000000000000000000000001",
+      "account_type": "cuenta_corriente",
+      "active": true,
+      "initial_balance": 500000,
+      "name": "Cuenta corriente ficticia",
+      "real_balance": 1465000,
+      "reconciliation_date": "2026-03-31",
+      "reconciliation_notes": "Conciliacion de ejemplo",
+      "reconciliation_status": "Conciliada",
+      "registered_balance": 1465000
+    },
+    {
+      "account_id": "acc00000000000000000000000000002",
+      "account_type": "ahorro",
+      "active": true,
+      "initial_balance": 200000,
+      "name": "Ahorro ficticio",
+      "real_balance": null,
+      "reconciliation_date": "2026-03-01",
+      "reconciliation_notes": "",
+      "reconciliation_status": "Pendiente",
+      "registered_balance": 300000
+    },
+    {
+      "account_id": "acc00000000000000000000000000003",
+      "account_type": "tarjeta_credito",
+      "active": false,
+      "initial_balance": -150000,
+      "name": "Linea ficticia",
+      "real_balance": -150000,
+      "reconciliation_date": "2026-02-28",
+      "reconciliation_notes": "",
+      "reconciliation_status": "Pendiente",
+      "registered_balance": -150000
+    }
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "encabezado": [
+    "Reporte ficticio",
+    "Periodo 2026-03"
+  ],
+  "fecha_creacion": "2026-03-31T20:00:00",
+  "id": "rep00000000000000000000000000001",
+  "mes": "2026-03",
+  "secciones": [
+    {
+      "lineas": [
+        "Ingresos: $ 1.200.000",
+        "Gastos: $ 75.000"
+      ],
+      "titulo": "Resumen de ejemplo"
+    },
+    {
+      "lineas": [],
+      "titulo": "Seccion vacia de ejemplo"
+    }
+  ],
+  "version": 1
+}

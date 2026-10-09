@@ -1,0 +1,51 @@
+{
+  "app": "Avalancha V2",
+  "backup_type": "profile",
+  "created_at": "2026-03-31T19:00:00",
+  "files": [
+    {
+      "path": "profile/config/reporte.key",
+      "role": "crypto_key",
+      "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+      "size": 262
+    },
+    {
+      "path": "profile/config/settings.json",
+      "role": "settings",
+      "sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+      "size": 214
+    },
+    {
+      "path": "profile/data/cuentas.json",
+      "role": "financial_data",
+      "sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+      "size": 1024
+    },
+    {
+      "path": "profile/data/presupuesto_2026-03.json",
+      "role": "financial_data",
+      "sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+      "size": 4096
+    },
+    {
+      "path": "profile/reportes/R2026-03.avr",
+      "role": "encrypted_report",
+      "sha256": "5555555555555555555555555555555555555555555555555555555555555555",
+      "size": 2048
+    },
+    {
+      "path": "profile/reportes/index.avridx",
+      "role": "report_index",
+      "sha256": "6666666666666666666666666666666666666666666666666666666666666666",
+      "size": 512
+    }
+  ],
+  "key_policy": {
+    "includes_reporte_key": true,
+    "portable_across_windows_users": false,
+    "protection": "dpapi"
+  },
+  "profile_id": "hogar_ficticio",
+  "profile_name": "Hogar Ficticio",
+  "schema_version": 1
+}

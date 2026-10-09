@@ -1,0 +1,44 @@
+{
+  "categories": [
+    {
+      "activa": true,
+      "clase": "variable",
+      "color_key": null,
+      "created_at": "2026-03-01T09:00:00",
+      "id": "cat_reembolso_ficticio",
+      "nombre": "Reembolso ficticio",
+      "tipo": "ambos",
+      "updated_at": "2026-03-01T09:00:00"
+    },
+    {
+      "activa": true,
+      "clase": "variable",
+      "color_key": "comida",
+      "created_at": "2026-03-01T09:00:00",
+      "id": "cat_comida_ficticia",
+      "nombre": "Comida ficticia",
+      "tipo": "gasto",
+      "updated_at": "2026-03-01T09:00:00"
+    },
+    {
+      "activa": false,
+      "clase": "fija",
+      "color_key": null,
+      "created_at": "2026-03-01T09:00:00",
+      "id": "cat_transporte_ficticio",
+      "nombre": "Transporte ficticio",
+      "tipo": "gasto",
+      "updated_at": "2026-03-20T16:45:00"
+    },
+    {
+      "activa": true,
+      "clase": "fija",
+      "color_key": null,
+      "created_at": "2026-03-01T09:00:00",
+      "id": "cat_sueldo_ficticio",
+      "nombre": "Sueldo ficticio",
+      "tipo": "ingreso",
+      "updated_at": "2026-03-01T09:00:00"
+    }
+  ]
+}

@@ -1,0 +1,8 @@
+{
+  "apariencia": "claro",
+  "carpeta_reportes": "reportes_ficticios",
+  "carpeta_respaldo": "respaldo_ficticio",
+  "cifrado_reportes": true,
+  "moneda_principal": "CLP",
+  "sincronizacion_habilitada": false
+}
