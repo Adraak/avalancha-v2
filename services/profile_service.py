@@ -16,7 +16,7 @@ from avalancha.storage import BudgetRepository
 PERFIL_PERSONAL = "personal"
 PERFIL_DEMO = "demo_avalancha"
 
-from core.json_file_store import JsonFileStore
+from core.versioned_json_store import VersionedJsonStore
 from services.error_reporting_service import UserFacingError
 from services.runtime_paths import RuntimePaths
 
@@ -100,6 +100,7 @@ class ProfileService:
             )
         self.registry_path = self.profiles_root / "perfiles.json"
         self.active_path = self.profiles_root / "perfil_activo.json"
+        self._validate_existing_catalog()
         self.profiles_root.mkdir(parents=True, exist_ok=True)
         self._ensure_personal_profile()
 
@@ -126,6 +127,7 @@ class ProfileService:
 
     def crear_perfil(self, nombre: str) -> PerfilAplicacion:
         """Crea un perfil vacio e independiente."""
+        self._validate_existing_catalog()
         clean_name = nombre.strip()
         if not clean_name:
             raise UserFacingError("El perfil necesita un nombre.")
@@ -142,6 +144,7 @@ class ProfileService:
 
     def seleccionar_perfil(self, perfil_id: str) -> PerfilAplicacion:
         """Cambia el perfil activo y lo devuelve."""
+        self._validate_existing_catalog()
         profile = self.obtener_perfil(perfil_id)
         self._write_json(self.active_path, {"slug": profile.id})
         return self.obtener_perfil(perfil_id)
@@ -201,6 +204,11 @@ class ProfileService:
         """Registra el perfil demo si falta, sin generar datos."""
         return self._register_if_missing(PERFIL_DEMO, "Demo Avalancha")
 
+    def _validate_existing_catalog(self) -> None:
+        """Lee catalogo y perfil activo antes de permitir mutaciones."""
+        for path in (self.registry_path, self.active_path):
+            self._read_json(path, {})
+
     def _ensure_personal_profile(self) -> None:
         """Crea y migra el perfil personal si falta."""
         profile = self._register_if_missing(PERFIL_PERSONAL, "Personal")
@@ -246,6 +254,7 @@ class ProfileService:
         name: str,
     ) -> PerfilAplicacion:
         """Registra un perfil si no existe."""
+        self._validate_existing_catalog()
         registry = self._read_registry()
         if not any(item["slug"] == slug for item in registry):
             registry.append({"slug": slug, "nombre": name})
@@ -332,14 +341,14 @@ class ProfileService:
         """Lee JSON de forma tolerante."""
         if not path.exists():
             return default
-        data = JsonFileStore().read(path)
+        data = VersionedJsonStore().read(path)
         return data if isinstance(data, dict) else default
 
     @staticmethod
     def _write_json(path: Path, data: dict[str, Any]) -> None:
         """Escribe JSON con formato estable."""
         path.parent.mkdir(parents=True, exist_ok=True)
-        JsonFileStore().write(path, data)
+        VersionedJsonStore().write(path, data)
 
     @staticmethod
     def _copy_if_missing(source: Path, target: Path) -> None:

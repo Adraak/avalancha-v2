@@ -10,7 +10,7 @@ from uuid import uuid4
 from avalancha.models import CategoryBudget, EXPENSE
 from avalancha.storage import BudgetRepository
 
-from core.json_file_store import JsonFileStore
+from core.versioned_json_store import VersionedJsonStore
 from core.models.presupuesto import Presupuesto
 from services.error_reporting_service import UserFacingError
 from services.category_service import CategoryService
@@ -46,7 +46,7 @@ class BudgetService:
         self.year = year or today.year
         self.month = month or today.month
         self.repository = repository or BudgetRepository(data_dir)
-        self._json_store = JsonFileStore()
+        self._json_store = VersionedJsonStore()
         self.category_service = category_service or CategoryService(
             data_dir=self.repository.data_dir,
             repository=self.repository,

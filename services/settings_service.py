@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from core.json_file_store import JsonFileStore
+from core.versioned_json_store import VersionedJsonStore
 from core.models.configuracion import ConfiguracionAplicacion
 
 
@@ -27,7 +27,7 @@ class SettingsService:
         self.reports_dir = Path(reports_dir)
         self.backup_dir = Path(backup_dir)
         self.settings_path = self.config_dir / self.ARCHIVO_CONFIGURACION
-        self._json_store = JsonFileStore()
+        self._json_store = VersionedJsonStore()
 
     def cargar_configuracion(self) -> ConfiguracionAplicacion:
         """Carga configuracion persistida o devuelve valores por defecto."""
@@ -50,6 +50,7 @@ class SettingsService:
             else self._crear_desde_datos(datos)
         )
         config = self._validar_configuracion(config)
+        self._json_store.check_existing(self.settings_path)
         self._crear_carpetas_configuradas(config)
         self.config_dir.mkdir(parents=True, exist_ok=True)
         self._json_store.write(self.settings_path, config.to_dict())

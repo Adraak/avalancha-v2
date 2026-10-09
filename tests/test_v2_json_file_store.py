@@ -524,10 +524,14 @@ def test_repository_save_keeps_schema_v1_structure(data_dir: Path) -> None:
         "monthly_closures.json",
     ):
         expected = load_json(fixture_path(f"profile_data/{name}"))
-        assert load_json(data_dir / name) == expected
+        assert load_json(data_dir / name) == {**expected, "schema_version": 1}
     expected = load_json(fixture_path("profile_data/presupuesto_2026-03.json"))
     written = load_json(data_dir / "presupuesto_2026-03.json")
-    assert {**written, "updated_at": None} == {**expected, "updated_at": None}
+    assert {**written, "updated_at": None} == {
+        **expected,
+        "schema_version": 1,
+        "updated_at": None,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -619,7 +623,7 @@ def test_category_service_still_creates_missing_file_on_read(
     categories = service.listar_categorias()
 
     written = load_json(service.categories_path)
-    assert set(written) == {"categories"}
+    assert set(written) == {"categories", "schema_version"}
     assert len(written["categories"]) == len(categories) > 0
     assert leftovers(service.data_dir) == []
 
@@ -717,7 +721,10 @@ def test_settings_service_save_keeps_the_six_current_fields(
 
     service.guardar_configuracion(dict(fixture))
 
-    assert load_json(service.settings_path) == fixture
+    assert load_json(service.settings_path) == {
+        **fixture,
+        "schema_version": 1,
+    }
     assert leftovers(service.config_dir) == []
 
 
@@ -796,8 +803,12 @@ def test_profile_service_writes_keep_current_catalog_structure(
     service.seleccionar_perfil("personal")
     created = service.crear_perfil("Negocio Ficticio")
 
-    assert load_json(service.active_path) == {"slug": "personal"}
+    assert load_json(service.active_path) == {
+        "schema_version": 1,
+        "slug": "personal",
+    }
     assert load_json(service.registry_path) == {
+        "schema_version": 1,
         "perfiles": [
             {"nombre": "Hogar Ficticio", "slug": "hogar_ficticio"},
             {"nombre": "Negocio Ficticio", "slug": created.id},

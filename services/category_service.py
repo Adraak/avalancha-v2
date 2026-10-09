@@ -10,7 +10,7 @@ from uuid import uuid4
 
 from avalancha.models import EXPENSE, INCOME
 from avalancha.storage import BudgetRepository
-from core.json_file_store import JsonFileStore
+from core.versioned_json_store import VersionedJsonStore
 from core.models.categoria import (
     CLASES_CATEGORIA,
     TIPOS_CATEGORIA,
@@ -69,7 +69,7 @@ class CategoryService:
         self.repository = repository or BudgetRepository(data_dir)
         self.data_dir = self.repository.data_dir
         self.categories_path = self.data_dir / "categorias.json"
-        self._json_store = JsonFileStore()
+        self._json_store = VersionedJsonStore()
 
     def listar_categorias(self) -> list[Categoria]:
         """Devuelve todas las categorias conocidas del perfil."""

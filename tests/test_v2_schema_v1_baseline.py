@@ -2,11 +2,14 @@
 
 "schema_v1" representa el formato persistente legacy existente antes de
 incorporar versionado explícito. Los fixtures de ``tests/fixtures/schema_v1``
-son sintéticos y documentan lo que producción lee y escribe hoy.
+son sintéticos y documentan ese formato legacy: no declaran
+``schema_version`` y deben seguir leyéndose como versión 1 implícita.
 
-Producción todavía NO escribe ``schema_version`` en los archivos financieros,
-de catálogo ni de configuración. Las únicas versiones presentes hoy son la del
-manifest de respaldo y el campo ``version`` de reportes e índice.
+Desde la Etapa 22D toda escritura legítima agrega ``"schema_version": 1`` en
+la raíz. Por eso los pocos tests de este módulo que observan un archivo
+recién escrito esperan esa clave además del contenido del fixture; los
+fixtures no la tienen ni deben tenerla. El formato explícitamente
+versionado se prueba en ``tests/test_v2_schema_versioning.py``.
 
 Los tests llamados ``test_legacy_characterization_*`` describen el
 comportamiento actual, incluso cuando es peligroso. No son una expectativa
@@ -696,7 +699,7 @@ def test_schema_v1_settings_saved_file_matches_fixture(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Guardar la configuración escribe exactamente los campos del fixture."""
+    """Guardar escribe los campos del fixture más la versión de esquema."""
     monkeypatch.chdir(tmp_path)
     fixture = load_fixture("profile_config/settings.json")
     service = build_settings_service(tmp_path)
@@ -704,7 +707,7 @@ def test_schema_v1_settings_saved_file_matches_fixture(
     service.guardar_configuracion(dict(fixture))
 
     written = json.loads(service.settings_path.read_text(encoding="utf-8"))
-    assert written == fixture
+    assert written == {**fixture, "schema_version": 1}
 
 
 def test_schema_v1_settings_missing_file_uses_current_defaults(
@@ -870,9 +873,13 @@ def test_legacy_characterization_missing_catalog_only_registers_personal(
     assert service.obtener_activo().id == "personal"
     assert orphan.is_dir()
     registry = json.loads(service.registry_path.read_text(encoding="utf-8"))
-    assert registry == {"perfiles": [{"nombre": "Personal", "slug": "personal"}]}
+    assert registry == {
+        "perfiles": [{"nombre": "Personal", "slug": "personal"}],
+        "schema_version": 1,
+    }
     assert json.loads(service.active_path.read_text(encoding="utf-8")) == {
         "slug": "personal",
+        "schema_version": 1,
     }
 
 
@@ -1567,7 +1574,10 @@ def test_legacy_characterization_unknown_field_is_lost_when_file_is_saved(
     repository.save_accounts(repository.load_accounts())
 
     written = json.loads(repository.accounts_path.read_text(encoding="utf-8"))
-    assert written == load_fixture("profile_data/cuentas.json")
+    assert written == {
+        **load_fixture("profile_data/cuentas.json"),
+        "schema_version": 1,
+    }
 
 
 @pytest.mark.parametrize(
@@ -1895,7 +1905,8 @@ def test_legacy_characterization_budget_service_persists_missing_budget_ids_on_r
     assert written["created_at"] == raw["created_at"]
     assert written["transactions"] == raw["transactions"]
     assert written["recurring_items"] == raw["recurring_items"]
-    assert set(written) == set(raw)
+    assert set(written) == set(raw) | {"schema_version"}
+    assert written["schema_version"] == 1
     assert listed == {
         "Comida ficticia": generated["Comida ficticia"],
         "Transporte ficticio": raw_by_name["Transporte ficticio"]["budget_id"],

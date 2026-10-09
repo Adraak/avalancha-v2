@@ -16,7 +16,7 @@ from avalancha.models import (
     now_iso,
     validate_month,
 )
-from core.json_file_store import JsonFileStore
+from core.versioned_json_store import VersionedJsonStore
 from core.models.monthly_closure import MonthlyClosure
 
 
@@ -30,7 +30,7 @@ class BudgetRepository:
         """Inicializa las carpetas de datos y respaldos internos."""
         self.data_dir = Path(data_dir)
         self.backup_dir = self.data_dir / "backups"
-        self._json_store = JsonFileStore()
+        self._json_store = VersionedJsonStore()
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self.backup_dir.mkdir(parents=True, exist_ok=True)
 
@@ -106,6 +106,7 @@ class BudgetRepository:
     def save(self, budget: MonthlyBudget) -> Path:
         """Guarda un mes y respalda previamente su versión existente."""
         path = self.budget_path(budget.year, budget.month)
+        self._json_store.check_existing(path)
         if path.exists():
             shutil.copy2(path, self._backup_path(path))
 
@@ -147,6 +148,7 @@ class BudgetRepository:
     def save_debts(self, debts: list[Debt]) -> Path:
         """Guarda las deudas globales con respaldo previo."""
         path = self.debts_path
+        self._json_store.check_existing(path)
         if path.exists():
             shutil.copy2(path, self._backup_path(path))
 
@@ -174,6 +176,7 @@ class BudgetRepository:
     ) -> Path:
         """Guarda pagos formales de deuda con respaldo previo."""
         path = self.debt_payments_path
+        self._json_store.check_existing(path)
         if path.exists():
             shutil.copy2(path, self._backup_path(path))
 
@@ -201,6 +204,7 @@ class BudgetRepository:
     ) -> Path:
         """Guarda snapshots de deuda con respaldo previo."""
         path = self.debt_snapshots_path
+        self._json_store.check_existing(path)
         if path.exists():
             shutil.copy2(path, self._backup_path(path))
 
@@ -224,6 +228,7 @@ class BudgetRepository:
     def save_accounts(self, accounts: list[CuentaFinanciera]) -> Path:
         """Guarda las cuentas financieras con respaldo previo."""
         path = self.accounts_path
+        self._json_store.check_existing(path)
         if path.exists():
             shutil.copy2(path, self._backup_path(path))
         self._json_store.write(
@@ -250,6 +255,7 @@ class BudgetRepository:
     ) -> Path:
         """Guarda estados de cierre mensual con respaldo previo."""
         path = self.monthly_closures_path
+        self._json_store.check_existing(path)
         if path.exists():
             shutil.copy2(path, self._backup_path(path))
 
