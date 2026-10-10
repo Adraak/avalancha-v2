@@ -1722,13 +1722,13 @@ def test_main_window_does_not_start_on_incompatible_active_profile(
     )
 
 
-def test_debt_22g_characterization_backup_does_not_include_profile_metadata(
+def test_resolved_22g_backup_now_includes_profile_metadata(
     legacy_root: Path,
 ) -> None:
-    """Hoy el respaldo de perfil no incluye profile_metadata.json.
+    """Desde la Etapa 22G, el respaldo de perfil incluye profile_metadata.json.
 
-    El inventario del respaldo cubre data, settings, clave y reportes, no
-    la raíz del perfil. Incluirlo corresponde a la Etapa 22G.
+    Cerraba una deuda caracterizada en 22E: el inventario del respaldo
+    cubría data, settings, clave y reportes, pero no la raíz del perfil.
     """
     profile = build_profile_service(legacy_root).obtener_activo()
     assert metadata_file(legacy_root).exists()
@@ -1736,4 +1736,4 @@ def test_debt_22g_characterization_backup_does_not_include_profile_metadata(
     logical_paths = [path for path, _, _ in ProfileBackupService()._inventariar(profile)]
 
     assert logical_paths
-    assert all(PROFILE_METADATA_FILE_NAME not in path for path in logical_paths)
+    assert any(PROFILE_METADATA_FILE_NAME in path for path in logical_paths)

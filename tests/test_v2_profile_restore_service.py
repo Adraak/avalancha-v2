@@ -21,6 +21,7 @@ from core.models.backup import (
     UnsafeBackupPathError,
 )
 from services.backup_service import MANIFEST_ENTRY_NAME, ProfileBackupService
+from services.profile_metadata_service import ProfileMetadataService
 from services.profile_restore_service import (
     ProfileRestoreService,
     _Journal,
@@ -49,6 +50,7 @@ def build_profile(
     profile.data_dir.mkdir(parents=True)
     profile.config_dir.mkdir(parents=True)
     profile.reports_dir.mkdir(parents=True)
+    ProfileMetadataService().ensure(profile)
     return profile
 
 
@@ -538,7 +540,7 @@ def test_fallo_write_intermedio_rollback(
 
     service = ProfileRestoreService()
     plan = service.preparar(creado.zip_path, destino)
-    assert len(plan.entries) == 3  # cuentas.json, deudas.json, settings.json
+    assert len(plan.entries) == 4  # cuentas, deudas, settings, profile_metadata
 
     contador = {"n": 0}
     original = ProfileRestoreService._aplicar_entrada
@@ -1069,7 +1071,14 @@ def test_descubrimiento_coincide_con_inventario_de_creacion(
         perfil.raiz.resolve(),
     )
 
-    assert set(administrados) == {entry.path for entry in creado.manifest.files}
+    # profile_metadata.json se gestiona aparte (nunca entra al sweep de
+    # DELETE del descubrimiento genérico): se excluye deliberadamente aquí.
+    manifest_paths = {
+        entry.path
+        for entry in creado.manifest.files
+        if entry.path != "profile/profile_metadata.json"
+    }
+    assert set(administrados) == manifest_paths
 
 
 # ---------------------------------------------------------------------------
@@ -1344,18 +1353,18 @@ def test_directorio_creado_con_contenido_externo_no_se_vacia(
     service = ProfileRestoreService()
     plan = service.preparar(creado.zip_path, destino)
     original = type(service)._aplicar_entrada
-    contador = {"n": 0}
+    estado = {"contaminado": False}
     marcador_externo = destino.data_dir / "aaa_subdir_nuevo" / "externo.txt"
 
-    def falla_y_contamina(self, entry, plan, _contador=contador):
-        _contador["n"] += 1
+    def falla_y_contamina(self, entry, plan, _estado=estado):
         resultado = original(self, entry, plan)
-        if _contador["n"] == 1:
+        if entry.logical_path == "profile/data/aaa_subdir_nuevo/archivo_a.json":
             # Algo externo deposita un archivo inesperado en el directorio
-            # recien creado, justo despues de que la primera entrada (la que
-            # vive en ese subdirectorio) se aplique con exito.
+            # recien creado, justo despues de que la entrada que vive en ese
+            # subdirectorio se aplique con exito.
             marcador_externo.write_text("externo-inesperado", encoding="utf-8")
-        if _contador["n"] == 2:
+            _estado["contaminado"] = True
+        elif _estado["contaminado"]:
             raise OSError("fallo simulado tras la contaminacion externa")
         return resultado
 

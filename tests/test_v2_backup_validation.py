@@ -24,6 +24,7 @@ from services.backup_service import (
     BackupValidator,
     ProfileBackupService,
 )
+from services.profile_metadata_service import ProfileMetadataService
 from services.profile_service import PerfilAplicacion
 from services.settings_service import SettingsService
 
@@ -37,12 +38,13 @@ def build_profile(
     profile_id: str = "personal",
     nombre: str = "Personal",
 ) -> PerfilAplicacion:
-    """Crea un perfil sintético con sus tres carpetas base."""
+    """Crea un perfil sintético con sus tres carpetas base y su metadata."""
     raiz = tmp_path / "perfiles" / profile_id
     profile = PerfilAplicacion(id=profile_id, nombre=nombre, raiz=raiz)
     profile.data_dir.mkdir(parents=True)
     profile.config_dir.mkdir(parents=True)
     profile.reports_dir.mkdir(parents=True)
+    ProfileMetadataService().ensure(profile)
     return profile
 
 
@@ -162,7 +164,7 @@ def test_backup_valido_es_aceptado(tmp_path: Path) -> None:
     assert resultado.error is None
     assert resultado.profile_id == profile.id
     assert resultado.file_count == len(creado.manifest.files)
-    assert resultado.schema_version == 1
+    assert resultado.schema_version == 2
 
 
 # ---------------------------------------------------------------------------
@@ -604,9 +606,13 @@ def test_entrada_de_directorio_rechazada(tmp_path: Path) -> None:
 
 
 def test_schema_version_incompatible_rechazado(tmp_path: Path) -> None:
-    """Un schema_version distinto de 1 se rechaza sin migrar automáticamente."""
+    """Un schema_version futuro se rechaza sin migrar automáticamente.
+
+    Desde 22G, 1 y 2 son versiones soportadas del manifest; la frontera de
+    incompatibilidad real es cualquier valor por encima del techo actual.
+    """
     zip_path = tmp_path / "schema_malo.zip"
-    build_zip_from_raw_manifest(zip_path, raw_manifest_dict(schema_version=2))
+    build_zip_from_raw_manifest(zip_path, raw_manifest_dict(schema_version=999))
 
     resultado = BackupValidator().validar_backup(zip_path)
 

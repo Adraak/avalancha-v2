@@ -12,6 +12,7 @@ from typing import Any
 APP_NAME = "Avalancha V2"
 BACKUP_TYPE_PROFILE = "profile"
 SCHEMA_VERSION = 1
+CURRENT_BACKUP_SCHEMA_VERSION = 2
 BACKUP_FILE_ROLES = frozenset(
     {
         "financial_data",
@@ -19,6 +20,7 @@ BACKUP_FILE_ROLES = frozenset(
         "crypto_key",
         "encrypted_report",
         "report_index",
+        "profile_metadata",
     },
 )
 KEY_PROTECTIONS = frozenset({"dpapi", "plain", "missing"})
@@ -218,7 +220,19 @@ class BackupKeyPolicy:
 
 @dataclass(frozen=True, slots=True)
 class BackupManifest:
-    """Contrato serializable de un respaldo local por perfil."""
+    """Contrato serializable de un respaldo local por perfil.
+
+    ``schema_version`` versiona el CONTRATO DEL MANIFEST DE BACKUP, un eje
+    completamente distinto de:
+
+    - el ``schema_version`` de cada archivo financiero individual (22D);
+    - el ``schema_version``/``profile_format_version`` de
+      ``profile_metadata.json`` (22E).
+
+    Versión 1 (histórica): sin ``app_version`` ni ``profile_format_version``.
+    Versión 2 (actual, desde 22G): incluye ambos campos y exige
+    ``profile_metadata.json`` entre los archivos del respaldo.
+    """
 
     schema_version: int
     app: str
@@ -228,17 +242,38 @@ class BackupManifest:
     profile_name: str
     key_policy: BackupKeyPolicy
     files: tuple[BackupFileEntry, ...]
+    app_version: str | None = None
+    profile_format_version: int | None = None
 
     def __post_init__(self) -> None:
         """Valida la estructura completa del manifest."""
         if (
             not isinstance(self.schema_version, int)
             or isinstance(self.schema_version, bool)
-            or self.schema_version != SCHEMA_VERSION
+            or self.schema_version <= 0
         ):
+            raise InvalidBackupManifestError(
+                "La version del manifest de respaldo no es valida.",
+            )
+        if self.schema_version > CURRENT_BACKUP_SCHEMA_VERSION:
             raise UnsupportedBackupVersionError(
                 "La version del manifest de respaldo no esta soportada.",
             )
+        if self.schema_version >= 2:
+            if (
+                not isinstance(self.app_version, str)
+                or not self.app_version.strip()
+            ):
+                raise InvalidBackupManifestError(
+                    "La version de la aplicacion del manifest no es valida.",
+                )
+            if (
+                type(self.profile_format_version) is not int
+                or self.profile_format_version <= 0
+            ):
+                raise InvalidBackupManifestError(
+                    "El profile_format_version del manifest no es valido.",
+                )
         if self.app != APP_NAME:
             raise InvalidBackupManifestError(
                 "La aplicacion del manifest de respaldo no es valida.",
@@ -274,7 +309,7 @@ class BackupManifest:
 
     def to_dict(self) -> dict[str, Any]:
         """Convierte el manifest a datos serializables deterministas."""
-        return {
+        document: dict[str, Any] = {
             "schema_version": self.schema_version,
             "app": self.app,
             "created_at": self.created_at,
@@ -284,6 +319,11 @@ class BackupManifest:
             "key_policy": self.key_policy.to_dict(),
             "files": [item.to_dict() for item in self.files],
         }
+        if self.app_version is not None:
+            document["app_version"] = self.app_version
+        if self.profile_format_version is not None:
+            document["profile_format_version"] = self.profile_format_version
+        return document
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "BackupManifest":
@@ -322,6 +362,10 @@ class BackupManifest:
             ),
             key_policy=BackupKeyPolicy.from_dict(data.get("key_policy", {})),
             files=tuple(BackupFileEntry.from_dict(item) for item in files_data),
+            app_version=data.get("app_version"),  # type: ignore[arg-type]
+            profile_format_version=data.get(  # type: ignore[arg-type]
+                "profile_format_version",
+            ),
         )
 
 

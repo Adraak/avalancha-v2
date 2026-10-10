@@ -24,6 +24,7 @@ from services.backup_service import (
     BackupValidator,
     ProfileBackupService,
 )
+from services.profile_metadata_service import ProfileMetadataService
 from services.profile_service import PerfilAplicacion
 from services.settings_service import SettingsService
 
@@ -37,12 +38,13 @@ def build_profile(
     profile_id: str = "personal",
     nombre: str = "Personal",
 ) -> PerfilAplicacion:
-    """Crea un perfil sintético con sus tres carpetas base."""
+    """Crea un perfil sintético con sus tres carpetas base y su metadata."""
     raiz = tmp_path / "perfiles" / profile_id
     profile = PerfilAplicacion(id=profile_id, nombre=nombre, raiz=raiz)
     profile.data_dir.mkdir(parents=True)
     profile.config_dir.mkdir(parents=True)
     profile.reports_dir.mkdir(parents=True)
+    ProfileMetadataService().ensure(profile)
     return profile
 
 
@@ -84,9 +86,13 @@ class TestCreacionBasica:
         result = service.crear_backup(profile, settings_service, now=FIXED_NOW)
 
         assert result.zip_path.exists()
-        assert len(result.manifest.files) == 1
-        assert result.manifest.files[0].path == "profile/data/cuentas.json"
-        assert result.manifest.files[0].role == "financial_data"
+        by_path = {entry.path: entry for entry in result.manifest.files}
+        assert set(by_path) == {
+            "profile/data/cuentas.json",
+            "profile/profile_metadata.json",
+        }
+        assert by_path["profile/data/cuentas.json"].role == "financial_data"
+        assert by_path["profile/profile_metadata.json"].role == "profile_metadata"
 
     def test_varios_archivos_financieros_incluidos(self, tmp_path: Path) -> None:
         """Incluye varios archivos financieros, incluso en subcarpetas."""
@@ -106,10 +112,12 @@ class TestCreacionBasica:
             "profile/data/deudas.json",
             "profile/data/presupuesto_2026-09.json",
             "profile/data/backups/cuentas.backup_20260101T000000.json",
+            "profile/profile_metadata.json",
         }
-        assert all(
-            entry.role == "financial_data" for entry in result.manifest.files
-        )
+        financial_entries = [
+            entry for entry in result.manifest.files if entry.path != "profile/profile_metadata.json"
+        ]
+        assert all(entry.role == "financial_data" for entry in financial_entries)
 
     def test_settings_incluido_cuando_existe(self, tmp_path: Path) -> None:
         """Incluye settings.json con rol settings cuando fue persistido."""
@@ -232,7 +240,10 @@ class TestCreacionBasica:
 
         result = service.crear_backup(profile, settings_service, now=FIXED_NOW)
 
-        assert len(result.manifest.files) == 1
+        assert {entry.path for entry in result.manifest.files} == {
+            "profile/data/cuentas.json",
+            "profile/profile_metadata.json",
+        }
         assert not any("logs" in entry.path for entry in result.manifest.files)
         assert not any(
             "__pycache__" in entry.path for entry in result.manifest.files
@@ -253,7 +264,9 @@ class TestCreacionBasica:
 
         paths_a = [entry.path for entry in resultado_a.manifest.files]
         paths_b = [entry.path for entry in resultado_b.manifest.files]
-        assert paths_a == paths_b == sorted(paths_a)
+        assert paths_a == paths_b
+        data_paths = [path for path in paths_a if path.startswith("profile/data/")]
+        assert data_paths == sorted(data_paths)
 
 
 class TestManifestYValidacion:
@@ -268,12 +281,14 @@ class TestManifestYValidacion:
 
         result = service.crear_backup(profile, settings_service, now=FIXED_NOW)
 
-        assert result.manifest.schema_version == 1
+        assert result.manifest.schema_version == 2
         assert result.manifest.app == "Avalancha V2"
         assert result.manifest.backup_type == "profile"
         assert result.manifest.profile_id == "personal"
         assert result.manifest.profile_name == "Personal"
         assert result.manifest.created_at == FIXED_NOW.isoformat(timespec="seconds")
+        assert result.manifest.app_version
+        assert result.manifest.profile_format_version == 1
 
     def test_sha_y_size_corresponden_a_bytes_reales(self, tmp_path: Path) -> None:
         """El SHA-256 y tamaño del manifest corresponden a los bytes en el ZIP."""
@@ -516,7 +531,10 @@ class TestPublicacionYFallos:
         settings_a = build_settings_service(perfil_a, tmp_path / "backups_a")
         resultado_a = service.crear_backup(perfil_a, settings_a, now=FIXED_NOW)
 
-        assert len(resultado_a.manifest.files) == 1
+        assert {entry.path for entry in resultado_a.manifest.files} == {
+            "profile/data/cuentas.json",
+            "profile/profile_metadata.json",
+        }
         assert resultado_a.manifest.profile_id == "personal"
         with zipfile.ZipFile(resultado_a.zip_path) as archive:
             data = archive.read("profile/data/cuentas.json")
@@ -640,4 +658,6 @@ def _build_manual_manifest() -> BackupManifest:
                 role="financial_data",
             ),
         ],
+        app_version="0.1.0",
+        profile_format_version=1,
     )

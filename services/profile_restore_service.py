@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import fnmatch
 import hashlib
 import json
 import os
@@ -27,14 +28,20 @@ from core.models.backup import (
     UnsafeBackupPathError,
     normalize_backup_path,
 )
+from core.profile_metadata import PROFILE_METADATA_FILE_NAME, ProfileMetadataPolicy
+from core.schema_versioning import SchemaVersionError, SchemaVersionPolicy
 from services.backup_manifest_service import BackupManifestService
 from services.backup_service import (
     MANIFEST_ENTRY_NAME,
     MAX_SINGLE_FILE_SIZE,
     BackupValidator,
 )
+from services.profile_metadata_service import ProfileDocumentInventory
 from services.profile_service import PerfilAplicacion
 from services.settings_service import SettingsService
+
+
+PROFILE_METADATA_LOGICAL_PATH = f"profile/{PROFILE_METADATA_FILE_NAME}"
 
 
 _CHUNK_SIZE = 1024 * 1024
@@ -264,6 +271,8 @@ class ProfileRestoreService:
                         clave,
                     )
 
+            self._validar_version_y_metadata(manifest, profile, staging_new)
+
             entries = self._construir_entries(
                 manifest,
                 profile,
@@ -450,6 +459,114 @@ class ProfileRestoreService:
                     "Un rol criptográfico aparece asociado a una ruta que no"
                     " corresponde a la unidad criptográfica.",
                 )
+
+    def _validar_version_y_metadata(
+        self,
+        manifest: BackupManifest,
+        profile: PerfilAplicacion,
+        staging_new: Path,
+    ) -> None:
+        """Valida, antes de tocar el destino, todo lo versionado del respaldo.
+
+        Cubre tres ejes distintos, cada uno con su propia infraestructura ya
+        aprobada, sin crear una política paralela:
+
+        - ``schema_version`` del MANIFEST (22G): ya lo valida
+          ``BackupManifest.__post_init__`` al construirse (futuro -> error
+          antes de llegar aquí).
+        - ``schema_version`` de cada archivo financiero/settings (22D): vía
+          ``SchemaVersionPolicy``, releyendo la copia en staging, nunca el
+          destino.
+        - ``schema_version``/``profile_format_version`` de
+          ``profile_metadata.json`` (22E), y su coherencia con el
+          ``profile_format_version`` declarado por el manifest (22G): vía
+          ``ProfileMetadataPolicy``, también sobre la copia en staging.
+
+        Un respaldo v1 histórico no declara ``profile_format_version`` ni
+        incluye necesariamente ``profile_metadata.json``: no se le exige
+        retroactivamente.
+        """
+        declared = {entry.path: entry for entry in manifest.files}
+
+        for entry in manifest.files:
+            if not self._requiere_preflight_de_schema(entry.path, entry.role):
+                continue
+            staged_path = self._ruta_staging(staging_new, entry.path)
+            try:
+                document = json.loads(
+                    staged_path.read_bytes().decode("utf-8"),
+                )
+            except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+                raise RestorePreparationError(
+                    f"{entry.path} no es JSON legible; no puede"
+                    " restaurarse.",
+                ) from exc
+            try:
+                SchemaVersionPolicy().validate(document)
+            except SchemaVersionError as exc:
+                raise RestorePreparationError(
+                    f"{entry.path} declara una versión de esquema"
+                    " incompatible; la restauración se rechaza por"
+                    " completo antes de modificar el perfil destino.",
+                ) from exc
+
+        if manifest.schema_version < 2:
+            return
+
+        metadata_entry = declared.get(PROFILE_METADATA_LOGICAL_PATH)
+        if metadata_entry is None:
+            raise RestorePreparationError(
+                "El respaldo declara el formato de manifest actual pero no"
+                " incluye profile_metadata.json: no puede restaurarse.",
+            )
+        if metadata_entry.role != "profile_metadata":
+            raise RestorePreparationError(
+                f"{PROFILE_METADATA_LOGICAL_PATH} debe usar el rol"
+                " profile_metadata.",
+            )
+
+        staged_metadata_path = self._ruta_staging(
+            staging_new,
+            PROFILE_METADATA_LOGICAL_PATH,
+        )
+        try:
+            metadata_document = json.loads(
+                staged_metadata_path.read_bytes().decode("utf-8"),
+            )
+        except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+            raise RestorePreparationError(
+                "profile_metadata.json del respaldo no es JSON legible; no"
+                " puede restaurarse.",
+            ) from exc
+
+        metadata = ProfileMetadataPolicy().parse(
+            metadata_document,
+            expected_slug=profile.id,
+        )
+        if metadata.profile_format_version != manifest.profile_format_version:
+            raise RestorePreparationError(
+                "El profile_format_version del manifest no coincide con el"
+                " de profile_metadata.json: el respaldo es inválido.",
+            )
+
+    @staticmethod
+    def _requiere_preflight_de_schema(logical_path: str, role: str) -> bool:
+        """Indica si un archivo del respaldo debe validar su schema_version.
+
+        Reutiliza exactamente las familias de ``ProfileDocumentInventory``
+        (22E): presupuestos, cuentas, deudas, pagos, snapshots, cierres,
+        categorías y settings. Deliberadamente fuera: historial_mensual,
+        reportes .avr, el índice de reportes y reporte.key.
+        """
+        name = Path(logical_path).name
+        if role == "financial_data":
+            return (
+                fnmatch.fnmatch(name, ProfileDocumentInventory.BUDGET_FILE_PATTERN)
+                or name in ProfileDocumentInventory.DATA_FILE_NAMES
+            )
+        if role == "settings":
+            return name in ProfileDocumentInventory.CONFIG_FILE_NAMES
+        return False
 
     @staticmethod
     def _validar_clave_candidata(
@@ -694,6 +811,8 @@ class ProfileRestoreService:
     @staticmethod
     def _ruta_destino(profile: PerfilAplicacion, logical_path: str) -> Path:
         """Traduce una ruta lógica del manifest a una ruta real del perfil."""
+        if logical_path == PROFILE_METADATA_LOGICAL_PATH:
+            return profile.raiz / PROFILE_METADATA_FILE_NAME
         if logical_path == "profile/config/settings.json":
             return profile.config_dir / "settings.json"
         if logical_path == "profile/config/reporte.key":

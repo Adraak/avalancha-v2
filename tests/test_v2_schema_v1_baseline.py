@@ -49,6 +49,7 @@ from avalancha.storage import BudgetRepository
 from core.models.backup import (
     BACKUP_FILE_ROLES,
     SCHEMA_VERSION,
+    InvalidBackupManifestError,
     UnsupportedBackupVersionError,
 )
 from core.models import monthly_closure
@@ -964,7 +965,10 @@ def test_schema_v1_backup_manifest_structural_fields() -> None:
     for item in fixture["files"]:
         assert set(item) == {"path", "size", "sha256", "role"}
         assert item["path"].startswith("profile/")
-    assert {item["role"] for item in fixture["files"]} == BACKUP_FILE_ROLES
+    # El fixture es un manifest v1 histórico: sus roles son un subconjunto
+    # de los roles soportados hoy (que desde 22G incluyen profile_metadata,
+    # inexistente en el contrato v1 original).
+    assert {item["role"] for item in fixture["files"]}.issubset(BACKUP_FILE_ROLES)
 
 
 def test_legacy_characterization_manifest_has_no_product_or_data_version() -> None:
@@ -975,15 +979,38 @@ def test_legacy_characterization_manifest_has_no_product_or_data_version() -> No
         assert absent not in fixture
 
 
-@pytest.mark.parametrize("version", (0, 2, "1", 1.0, True, None))
-def test_schema_v1_backup_manifest_rejects_any_other_version(
+@pytest.mark.parametrize("version", (0, "1", 1.0, True, None))
+def test_schema_v1_backup_manifest_rejects_invalid_version(
     version: object,
 ) -> None:
-    """Cualquier versión distinta del entero 1 se rechaza hoy."""
+    """Un tipo/valor de schema_version no entero-positivo se rechaza.
+
+    Desde 22G, 2 es una versión soportada del manifest (ver test de
+    versión futura, abajo), pero exige los campos nuevos de la versión 2;
+    el fixture v1 no los tiene, así que se cubre aparte.
+    """
     data = load_fixture("backup_manifest/manifest.json")
     data["schema_version"] = version
 
+    with pytest.raises(InvalidBackupManifestError):
+        BackupManifestService().from_json(json.dumps(data))
+
+
+def test_schema_v1_backup_manifest_rejects_future_version() -> None:
+    """Una versión por encima del techo soportado se rechaza como futura."""
+    data = load_fixture("backup_manifest/manifest.json")
+    data["schema_version"] = 999
+
     with pytest.raises(UnsupportedBackupVersionError):
+        BackupManifestService().from_json(json.dumps(data))
+
+
+def test_schema_v1_backup_manifest_v2_without_new_fields_is_invalid() -> None:
+    """La versión 2 exige app_version y profile_format_version."""
+    data = load_fixture("backup_manifest/manifest.json")
+    data["schema_version"] = 2
+
+    with pytest.raises(InvalidBackupManifestError):
         BackupManifestService().from_json(json.dumps(data))
 
 
@@ -992,7 +1019,7 @@ def test_schema_v1_backup_manifest_rejects_missing_version() -> None:
     data = load_fixture("backup_manifest/manifest.json")
     del data["schema_version"]
 
-    with pytest.raises(UnsupportedBackupVersionError):
+    with pytest.raises(InvalidBackupManifestError):
         BackupManifestService().from_json(json.dumps(data))
 
 

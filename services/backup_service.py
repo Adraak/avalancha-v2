@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
+from avalancha import __version__ as AVALANCHA_VERSION
 from core.models.backup import (
     BackupAlreadyExistsError,
     BackupError,
@@ -23,7 +24,9 @@ from core.models.backup import (
     UnsafeBackupPathError,
     normalize_backup_path,
 )
+from core.profile_metadata import PROFILE_METADATA_FILE_NAME
 from services.backup_manifest_service import BackupManifestService
+from services.profile_metadata_service import ProfileMetadataService
 from services.profile_service import PerfilAplicacion
 from services.settings_service import SettingsService
 
@@ -254,10 +257,12 @@ class ProfileBackupService:
     def __init__(
         self,
         manifest_service: BackupManifestService | None = None,
+        metadata_service: ProfileMetadataService | None = None,
     ) -> None:
-        """Inicializa el servicio con su colaborador de manifest."""
+        """Inicializa el servicio con sus colaboradores de manifest y metadata."""
         self._manifest_service = manifest_service or BackupManifestService()
         self._validator = BackupValidator(self._manifest_service)
+        self._metadata_service = metadata_service or ProfileMetadataService()
 
     def crear_backup(
         self,
@@ -273,6 +278,13 @@ class ProfileBackupService:
         if final_path.exists():
             raise BackupAlreadyExistsError(
                 f"Ya existe un respaldo publicado en {final_path}.",
+            )
+
+        metadata = self._metadata_service.validate_existing(profile)
+        if metadata is None:
+            raise BackupValidationError(
+                "El perfil no tiene metadata; no puede respaldarse con el"
+                " contrato de respaldo actual.",
             )
 
         inventory = self._inventariar(profile)
@@ -306,6 +318,7 @@ class ProfileBackupService:
                 created_at=created_at,
                 profile=profile,
                 key_policy=key_policy,
+                profile_format_version=metadata.profile_format_version,
             )
             resultado = self._validator.validar_backup(
                 tmp_path,
@@ -364,6 +377,17 @@ class ProfileBackupService:
         """Descubre de forma determinista los archivos permitidos del perfil."""
         profile_root = profile.raiz.resolve()
         inventory: list[tuple[str, Path, str]] = []
+
+        metadata_path = profile.raiz / PROFILE_METADATA_FILE_NAME
+        if metadata_path.is_file():
+            self._verificar_dentro_de_raiz(metadata_path.resolve(), profile_root)
+            inventory.append(
+                (
+                    normalize_backup_path("profile/profile_metadata.json"),
+                    metadata_path,
+                    "profile_metadata",
+                ),
+            )
 
         data_root = profile.data_dir
         if data_root.is_dir():
@@ -487,6 +511,7 @@ class ProfileBackupService:
         created_at: str,
         profile: PerfilAplicacion,
         key_policy: BackupKeyPolicy,
+        profile_format_version: int,
     ) -> BackupManifest:
         """Escribe el ZIP temporal calculando hashes desde los bytes reales."""
         file_entries: list[BackupFileEntry] = []
@@ -516,6 +541,8 @@ class ProfileBackupService:
                     profile_name=profile.nombre,
                     key_policy=key_policy,
                     files=file_entries,
+                    app_version=AVALANCHA_VERSION,
+                    profile_format_version=profile_format_version,
                 )
                 archive.writestr(
                     MANIFEST_ENTRY_NAME,

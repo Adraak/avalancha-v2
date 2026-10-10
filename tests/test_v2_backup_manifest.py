@@ -9,6 +9,7 @@ import pytest
 from core.models.backup import (
     APP_NAME,
     BACKUP_TYPE_PROFILE,
+    CURRENT_BACKUP_SCHEMA_VERSION,
     SCHEMA_VERSION,
     BackupFileEntry,
     BackupKeyPolicy,
@@ -129,9 +130,42 @@ def test_manifest_valid() -> None:
 
 
 def test_manifest_rejects_unsupported_schema_version() -> None:
-    """Rechaza versiones de schema no soportadas."""
+    """Rechaza versiones de schema futuras (desde 22G, 1 y 2 son validas)."""
     with pytest.raises(UnsupportedBackupVersionError):
-        replace(valid_manifest(), schema_version=2)
+        replace(valid_manifest(), schema_version=CURRENT_BACKUP_SCHEMA_VERSION + 1)
+
+
+def test_manifest_v2_requires_app_version_and_profile_format_version() -> None:
+    """La version 2 del manifest exige ambos campos nuevos."""
+    with pytest.raises(InvalidBackupManifestError):
+        replace(valid_manifest(), schema_version=2, profile_format_version=1)
+    with pytest.raises(InvalidBackupManifestError):
+        replace(
+            valid_manifest(),
+            schema_version=2,
+            app_version="0.1.0",
+        )
+
+
+def test_manifest_v2_accepts_app_version_and_profile_format_version() -> None:
+    """La version 2 del manifest es valida con ambos campos presentes."""
+    manifest = replace(
+        valid_manifest(),
+        schema_version=2,
+        app_version="0.1.0",
+        profile_format_version=1,
+    )
+    assert manifest.schema_version == 2
+    assert manifest.app_version == "0.1.0"
+    assert manifest.profile_format_version == 1
+
+
+def test_manifest_v1_does_not_require_new_fields() -> None:
+    """La version 1 historica sigue siendo valida sin los campos nuevos."""
+    manifest = valid_manifest()
+    assert manifest.schema_version == SCHEMA_VERSION
+    assert manifest.app_version is None
+    assert manifest.profile_format_version is None
 
 
 def test_manifest_rejects_wrong_app() -> None:

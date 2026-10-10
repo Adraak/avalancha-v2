@@ -9,7 +9,7 @@ from typing import Any
 from core.models.backup import (
     APP_NAME,
     BACKUP_TYPE_PROFILE,
-    SCHEMA_VERSION,
+    CURRENT_BACKUP_SCHEMA_VERSION,
     BackupFileEntry,
     BackupKeyPolicy,
     BackupManifest,
@@ -28,10 +28,17 @@ class BackupManifestService:
         profile_name: str,
         key_policy: BackupKeyPolicy,
         files: list[BackupFileEntry],
+        app_version: str,
+        profile_format_version: int,
     ) -> BackupManifest:
-        """Construye un manifest de respaldo por perfil validado."""
+        """Construye un manifest de respaldo por perfil en la version actual.
+
+        Todo respaldo nuevo usa ``CURRENT_BACKUP_SCHEMA_VERSION`` (2): la
+        version 1 solo se reconoce al leer respaldos historicos existentes,
+        nunca se vuelve a producir.
+        """
         return BackupManifest(
-            schema_version=SCHEMA_VERSION,
+            schema_version=CURRENT_BACKUP_SCHEMA_VERSION,
             app=APP_NAME,
             created_at=created_at,
             backup_type=BACKUP_TYPE_PROFILE,
@@ -39,6 +46,8 @@ class BackupManifestService:
             profile_name=profile_name,
             key_policy=key_policy,
             files=tuple(files),
+            app_version=app_version,
+            profile_format_version=profile_format_version,
         )
 
     def to_json(self, manifest: BackupManifest) -> str:
