@@ -757,7 +757,11 @@ def test_profile_service_registry_write_is_atomic_when_replace_fails(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Si falla el reemplazo al crear un perfil, el catálogo queda intacto."""
+    """Si falla el reemplazo al crear un perfil, el catálogo queda intacto.
+
+    Desde 22E lo primero que se escribe son los metadatos del perfil
+    nuevo: si esa escritura falla no se registra nada ni queda carpeta.
+    """
     install_catalog(tmp_path)
     service = build_profile_service(tmp_path)
     before = service.registry_path.read_bytes()
@@ -767,7 +771,12 @@ def test_profile_service_registry_write_is_atomic_when_replace_fails(
         lambda: service.crear_perfil("Negocio Ficticio"),
     )
 
-    assert_temporary_next_to_target(recorder, service.registry_path)
+    new_profile_root = service.profiles_root / "negocio_ficticio"
+    assert_temporary_next_to_target(
+        recorder,
+        new_profile_root / "profile_metadata.json",
+    )
+    assert not new_profile_root.exists()
     assert service.registry_path.read_bytes() == before
     assert [item.id for item in service.listar_perfiles()] == [
         "hogar_ficticio",
@@ -780,14 +789,22 @@ def test_profile_service_failed_bootstrap_does_not_create_catalog(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Si falla el reemplazo en el primer arranque, no queda catálogo."""
+    """Si falla el reemplazo en el primer arranque, no queda catálogo.
+
+    Desde 22E el primer reemplazo es el de los metadatos del perfil
+    personal; al fallar no se registra el perfil ni queda su carpeta.
+    """
     recorder = run_with_failing_replace(
         monkeypatch,
         lambda: build_profile_service(tmp_path),
     )
 
     profiles_root = tmp_path / "perfiles"
-    assert_temporary_next_to_target(recorder, profiles_root / "perfiles.json")
+    assert_temporary_next_to_target(
+        recorder,
+        profiles_root / "personal" / "profile_metadata.json",
+    )
+    assert not (profiles_root / "personal").exists()
     assert not (profiles_root / "perfiles.json").exists()
     assert not (profiles_root / "perfil_activo.json").exists()
     assert leftovers(profiles_root) == []

@@ -18,7 +18,17 @@ PERFIL_DEMO = "demo_avalancha"
 
 from core.versioned_json_store import VersionedJsonStore
 from services.error_reporting_service import UserFacingError
+from services.profile_metadata_service import ProfileMetadataService
 from services.runtime_paths import RuntimePaths
+
+
+@dataclass(frozen=True, slots=True)
+class _LegacyCopy:
+    """Describe una copia pendiente desde las carpetas planas historicas."""
+
+    source: Path
+    target: Path
+    versioned: bool
 
 
 @dataclass(frozen=True, slots=True)
@@ -60,8 +70,10 @@ class ProfileService:
         legacy_data_dir: str | Path | None = None,
         legacy_reports_dir: str | Path | None = None,
         legacy_config_dir: str | Path | None = None,
+        metadata_service: ProfileMetadataService | None = None,
     ) -> None:
         """Inicializa registro y asegura el perfil personal."""
+        self._metadata_service = metadata_service or ProfileMetadataService()
         use_runtime_defaults = all(
             value is None
             for value in (
@@ -101,7 +113,6 @@ class ProfileService:
         self.registry_path = self.profiles_root / "perfiles.json"
         self.active_path = self.profiles_root / "perfil_activo.json"
         self._validate_existing_catalog()
-        self.profiles_root.mkdir(parents=True, exist_ok=True)
         self._ensure_personal_profile()
 
     def listar_perfiles(self) -> list[PerfilAplicacion]:
@@ -118,11 +129,21 @@ class ProfileService:
         return self.obtener_perfil(self._read_active_id())
 
     def obtener_perfil(self, perfil_id: str) -> PerfilAplicacion:
-        """Busca un perfil por identificador."""
+        """Busca un perfil por identificador y lo deja operativo.
+
+        Antes de devolverlo valida sus metadatos globales, o los crea
+        una sola vez si es un perfil historico sin ellos.
+        """
         active_id = self._read_active_id()
         for item in self._read_registry():
             if item["slug"] == perfil_id:
-                return self._build_profile(item["slug"], item["nombre"], active_id)
+                profile = self._build_profile(
+                    item["slug"],
+                    item["nombre"],
+                    active_id,
+                )
+                self._metadata_service.ensure(profile)
+                return profile
         raise UserFacingError("El perfil solicitado no existe.")
 
     def crear_perfil(self, nombre: str) -> PerfilAplicacion:
@@ -133,10 +154,10 @@ class ProfileService:
             raise UserFacingError("El perfil necesita un nombre.")
         slug = self._unique_slug(self._slugify(clean_name))
         registry = self._read_registry()
-        registry.append({"slug": slug, "nombre": clean_name})
-        self._write_registry(registry)
         profile = self._build_profile(slug, clean_name, self._read_active_id())
-        self._ensure_profile_dirs(profile)
+        self._metadata_service.validate_existing(profile)
+        registry.append({"slug": slug, "nombre": clean_name})
+        self._register_with_metadata(profile, registry)
         BudgetRepository(profile.data_dir).save(
             MonthlyBudget.empty(date.today().year, date.today().month),
         )
@@ -211,9 +232,11 @@ class ProfileService:
 
     def _ensure_personal_profile(self) -> None:
         """Crea y migra el perfil personal si falta."""
-        profile = self._register_if_missing(PERFIL_PERSONAL, "Personal")
-        self._ensure_profile_dirs(profile)
-        self._copy_legacy_personal_data(profile)
+        self._register_if_missing(
+            PERFIL_PERSONAL,
+            "Personal",
+            copy_legacy_data=True,
+        )
         if not self.active_path.exists():
             self._write_json(self.active_path, {"slug": PERFIL_PERSONAL})
 
@@ -230,38 +253,145 @@ class ProfileService:
             return False
         return bool(budget.transactions)
 
-    def _copy_legacy_personal_data(self, profile: PerfilAplicacion) -> None:
-        """Copia datos existentes al perfil personal sin sobrescribir."""
+    def _plan_legacy_personal_copy(
+        self,
+        profile: PerfilAplicacion,
+    ) -> list[_LegacyCopy]:
+        """Determina, sin escribir, que datos planos historicos se copiarian.
+
+        Conserva las reglas historicas: los datos solo se copian si el
+        perfil no tiene presupuestos, los reportes solo si no tiene
+        ninguno, y nunca se sobrescribe un archivo existente. Marca como
+        versionados los JSON ordinarios cuyo esquema debe revisarse antes
+        de copiar; el historial mensual, los reportes cifrados y la clave
+        quedan fuera de esa revision.
+        """
+        plan: list[_LegacyCopy] = []
         if not any(profile.data_dir.glob("presupuesto_????-??.json")):
-            for source in self.legacy_data_dir.glob("presupuesto_????-??.json"):
-                shutil.copy2(source, profile.data_dir / source.name)
-            for name in ("cuentas.json", "deudas.json", "historial_mensual.json"):
-                self._copy_if_missing(
+            for source in sorted(
+                self.legacy_data_dir.glob("presupuesto_????-??.json"),
+            ):
+                plan.append(
+                    _LegacyCopy(source, profile.data_dir / source.name, True),
+                )
+            for name, versioned in (
+                ("cuentas.json", True),
+                ("deudas.json", True),
+                ("historial_mensual.json", False),
+            ):
+                self._plan_copy_if_missing(
+                    plan,
                     self.legacy_data_dir / name,
                     profile.data_dir / name,
+                    versioned,
                 )
         if not any(profile.reports_dir.glob("*.avr*")):
-            for source in self.legacy_reports_dir.glob("*.avr*"):
-                self._copy_if_missing(source, profile.reports_dir / source.name)
-        self._copy_if_missing(
+            for source in sorted(self.legacy_reports_dir.glob("*.avr*")):
+                self._plan_copy_if_missing(
+                    plan,
+                    source,
+                    profile.reports_dir / source.name,
+                    False,
+                )
+        self._plan_copy_if_missing(
+            plan,
             self.legacy_config_dir / "reporte.key",
             profile.key_path,
+            False,
         )
+        return plan
+
+    @staticmethod
+    def _plan_copy_if_missing(
+        plan: list[_LegacyCopy],
+        source: Path,
+        target: Path,
+        versioned: bool,
+    ) -> None:
+        """Agrega una copia al plan solo si hay origen y falta el destino."""
+        if source.exists() and not target.exists():
+            plan.append(_LegacyCopy(source, target, versioned))
+
+    @staticmethod
+    def _run_legacy_copy(plan: list[_LegacyCopy]) -> None:
+        """Ejecuta las copias historicas ya planificadas y revisadas."""
+        for item in plan:
+            item.target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(item.source, item.target)
 
     def _register_if_missing(
         self,
         slug: str,
         name: str,
+        copy_legacy_data: bool = False,
     ) -> PerfilAplicacion:
-        """Registra un perfil si no existe."""
+        """Registra un perfil si no existe y asegura sus metadatos.
+
+        Antes de cualquier mutacion valida los metadatos presentes y,
+        si el perfil aun no esta etiquetado, sus archivos actuales y
+        las fuentes historicas que se copiarian. Solo despues crea
+        carpetas, copia, etiqueta y registra.
+        """
         self._validate_existing_catalog()
         registry = self._read_registry()
-        if not any(item["slug"] == slug for item in registry):
+        active_id = self._read_active_id()
+        profile = self._build_profile(slug, name, active_id)
+        registered = next(
+            (item for item in registry if item["slug"] == slug),
+            None,
+        )
+        catalog_profile = self._build_profile(
+            slug,
+            registered["nombre"] if registered else name,
+            active_id,
+        )
+        if self._metadata_service.validate_existing(catalog_profile) is None:
+            self._metadata_service.preflight_legacy_documents(catalog_profile)
+        plan = (
+            self._plan_legacy_personal_copy(catalog_profile)
+            if copy_legacy_data
+            else []
+        )
+        self._metadata_service.validate_documents(
+            [item.source for item in plan if item.versioned],
+            slug,
+        )
+        if registered is None:
             registry.append({"slug": slug, "nombre": name})
-            self._write_registry(registry)
-        profile = self._build_profile(slug, name, self._read_active_id())
-        self._ensure_profile_dirs(profile)
+            self._register_with_metadata(catalog_profile, registry, plan)
+            return profile
+        self._ensure_profile_dirs(catalog_profile)
+        self._run_legacy_copy(plan)
+        self._metadata_service.ensure(catalog_profile)
         return profile
+
+    def _register_with_metadata(
+        self,
+        profile: PerfilAplicacion,
+        registry: list[dict[str, str]],
+        legacy_copy_plan: list[_LegacyCopy] | None = None,
+    ) -> None:
+        """Crea carpetas y metadatos y solo despues registra el perfil.
+
+        Si algo falla antes de completar el registro, retira lo que esta
+        misma operacion creo: los metadatos nuevos y las carpetas que
+        sigan vacias. Nunca borra carpetas ni metadatos preexistentes.
+        """
+        had_metadata = self._metadata_service.has_metadata(profile)
+        created_dirs = self._ensure_profile_dirs(profile)
+        try:
+            self._run_legacy_copy(legacy_copy_plan or [])
+            self._metadata_service.ensure(profile)
+            self._write_registry(registry)
+        except BaseException:
+            if not had_metadata:
+                self._metadata_service.discard(profile)
+            for path in reversed(created_dirs):
+                try:
+                    path.rmdir()
+                except OSError:
+                    continue
+            raise
 
     def _build_profile(
         self,
@@ -277,15 +407,19 @@ class ProfileService:
             activo=slug == active_id,
         )
 
-    def _ensure_profile_dirs(self, profile: PerfilAplicacion) -> None:
-        """Crea carpetas internas del perfil."""
+    def _ensure_profile_dirs(self, profile: PerfilAplicacion) -> list[Path]:
+        """Crea carpetas internas del perfil y devuelve las nuevas."""
+        created = []
         for path in (
             profile.raiz,
             profile.data_dir,
             profile.reports_dir,
             profile.config_dir,
         ):
-            path.mkdir(parents=True, exist_ok=True)
+            if not path.exists():
+                path.mkdir(parents=True, exist_ok=True)
+                created.append(path)
+        return created
 
     def _read_active_id(self) -> str:
         """Lee el identificador activo desde disco."""
@@ -349,11 +483,3 @@ class ProfileService:
         """Escribe JSON con formato estable."""
         path.parent.mkdir(parents=True, exist_ok=True)
         VersionedJsonStore().write(path, data)
-
-    @staticmethod
-    def _copy_if_missing(source: Path, target: Path) -> None:
-        """Copia un archivo solo cuando el destino no existe."""
-        if not source.exists() or target.exists():
-            return
-        target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(source, target)

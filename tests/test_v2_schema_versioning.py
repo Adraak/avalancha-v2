@@ -25,10 +25,15 @@ from typing import Any, Callable
 
 import pytest
 
+from avalancha import __version__
 from avalancha.models import MonthlyBudget
 from avalancha.storage import BudgetRepository
 from core import json_file_store
 from core.json_file_store import JsonFileStore
+from core.profile_metadata import (
+    CURRENT_PROFILE_FORMAT_VERSION,
+    PROFILE_METADATA_FILE_NAME,
+)
 from core.schema_versioning import (
     CURRENT_SCHEMA_VERSION,
     LEGACY_IMPLICIT_SCHEMA_VERSION,
@@ -277,11 +282,21 @@ def version_keys(node: Any) -> int:
 
 
 @pytest.fixture()
-def workspace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Workspace:
+def workspace(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    request: pytest.FixtureRequest,
+) -> Workspace:
     """Arma el árbol temporal con los diez archivos en formato legacy.
 
     Incluye la carpeta ``backups`` vacía que BudgetRepository crea al
     construirse, como en cualquier perfil ya abierto alguna vez.
+
+    Desde la Etapa 22E la primera apertura de un perfil crea su
+    ``profile_metadata.json``. Las pruebas parametrizadas por familia
+    miden qué ocurre con los archivos versionados en aperturas
+    posteriores, así que parten de perfiles que ya tienen metadatos;
+    esa creación inicial se prueba en ``test_v2_profile_metadata.py``.
     """
     monkeypatch.chdir(tmp_path)
     space = Workspace(tmp_path)
@@ -298,6 +313,22 @@ def workspace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Workspace:
             fixture_path(f"catalog/{name}"),
             space.profiles_root / name,
         )
+    if "family" in request.fixturenames:
+        for slug, name in (
+            ("personal", "Personal"),
+            ("hogar_ficticio", "Hogar Ficticio"),
+        ):
+            (space.profiles_root / slug).mkdir()
+            dump_json(
+                space.profiles_root / slug / PROFILE_METADATA_FILE_NAME,
+                {
+                    SCHEMA_VERSION_KEY: CURRENT_SCHEMA_VERSION,
+                    "profile_format_version": CURRENT_PROFILE_FORMAT_VERSION,
+                    "profile_slug": slug,
+                    "profile_name": name,
+                    "app_version": __version__,
+                },
+            )
     space.config_dir.mkdir()
     shutil.copyfile(
         fixture_path("profile_config/settings.json"),
@@ -320,15 +351,20 @@ def assert_rejected_without_effects(
     action: Callable[[], Any],
     expected: type[SchemaVersionError],
 ) -> SchemaVersionError:
-    """Exige que la acción falle sin dejar ningún efecto en el filesystem."""
+    """Exige que la acción falle sin dejar ningún efecto en el filesystem.
+
+    Los reemplazos se cuentan desde este punto: la preparación de la
+    prueba puede haber escrito legítimamente antes de la acción.
+    """
     before = tree_snapshot(workspace.root)
+    replaced_before = list(replace_spy.targets)
 
     with pytest.raises(SchemaVersionError) as excinfo:
         action()
 
     assert excinfo.type is expected
     assert tree_snapshot(workspace.root) == before
-    assert replace_spy.targets == []
+    assert replace_spy.targets == replaced_before
     return excinfo.value
 
 
